@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/Kolos_Funding_Advisor.html" }
+  ]
+}

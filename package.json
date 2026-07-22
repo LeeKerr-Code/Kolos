@@ -1,18 +1,9 @@
 {
-  "name": "kolos-backend",
+  "name": "kolos-funding-advisor",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal backend proxy for the Kolos Funding Advisor front-end. Holds the Anthropic API key server-side.",
-  "main": "server.js",
+  "description": "Kolos Funding Advisor: static frontend + Vercel serverless API routes (api/chat.js, api/healthz.js) that proxy to the Anthropic API, keeping the API key server-side.",
   "engines": {
     "node": ">=18"
-  },
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2"
   }
 }

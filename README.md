@@ -7,10 +7,14 @@ Ukrainian farm funding programmes.
 ## Files
 
 - `Kolos_Funding_Advisor.html` — the chat UI (frontend only, no secrets inside)
-- `server.js`, `package.json`, `.env.example` — a minimal Node/Express backend proxy
+- `api/chat.js`, `api/healthz.js`, `vercel.json` — Vercel serverless functions that
+  hold the Anthropic API key server-side (this is the deployment path below)
+- `server.js` — an alternative Express backend, only relevant if you self-host on a
+  platform that runs a persistent Node process (Render, Railway, a VPS) instead of
+  Vercel. **Ignore it for the Vercel path** — it is not used there.
+- `package.json`, `.env.example` — shared config
 - `Ukraine_Farm_Funding_Reference_Brief.docx` — sourced research on current grant/loan
   programmes, compiled 22 July 2026, for your team to review as ground-truth content
-- `build_doc.js` — the script used to generate the .docx (kept for reproducibility)
 
 ## What was fixed and why
 
@@ -21,35 +25,66 @@ can view-source or open devtools' Network tab and copy it out, then run up your 
 bill or worse). This is not a minor bug — it's the difference between a demo and
 something you can safely put in front of real users.
 
-The fix: the frontend now POSTs to `/api/chat` instead. `server.js` is a small Express
-server that holds `ANTHROPIC_API_KEY` as a server-side environment variable and is the
-only thing that ever talks to `api.anthropic.com`.
+The fix: the frontend now POSTs to `/api/chat` instead. That route is a serverless
+function (`api/chat.js`) that holds `ANTHROPIC_API_KEY` as a server-side environment
+variable and is the only thing that ever talks to `api.anthropic.com`.
 
 **Also flagged, not silently changed:** the original code requested model
 `claude-sonnet-4-6`, which doesn't match any current Anthropic model name I can
-verify — it looks like a typo or a stale alias. `server.js` defaults to
+verify — it looks like a typo or a stale alias. `api/chat.js` defaults to
 `claude-sonnet-5` (Anthropic's current Sonnet model per their own docs as of this
 writing), but you should confirm against your Anthropic account / https://docs.claude.com
 before relying on it, since model access can vary by account and this wasn't something
 I could test against your actual API key.
 
-## Running it
+## Deploying via GitHub + Vercel
 
-1. `cd` into this folder.
-2. `npm install`
-3. `cp .env.example .env` and put your real `ANTHROPIC_API_KEY` in it.
-4. `npm start` — runs the backend on `http://localhost:8787` (override with `PORT`).
-5. Open `Kolos_Funding_Advisor.html` in a browser. By default it calls `/api/chat` on
-   its own origin. If you serve the HTML from a different host than the backend, add
-   this line **before** the existing `<script>` tag in the HTML:
+This is set up to deploy the normal way, with one thing to know: Vercel doesn't run a
+persistent server from a repo — it runs the files under `api/` as serverless functions,
+one route per file. `api/chat.js` and `api/healthz.js` are already written as Vercel
+functions, so the usual flow works as-is:
+
+1. Push this whole folder to a GitHub repo (all these files at the repo root, `api/`
+   as a real subfolder).
+2. In Vercel: **Add New... > Project**, import that GitHub repo. Framework preset can
+   stay "Other" — there's no build step needed.
+3. Before (or right after) the first deploy, go to **Project Settings > Environment
+   Variables** and add `ANTHROPIC_API_KEY` with your real key. Add it for Production
+   at minimum; add it for Preview and Development too if you want preview deploys and
+   `vercel dev` to work.
+4. Deploy. Vercel auto-detects `api/chat.js` → `/api/chat` and `api/healthz.js` →
+   `/api/healthz`. `vercel.json` routes the root URL to `Kolos_Funding_Advisor.html` so
+   visiting the deployment's main URL opens the app directly.
+5. Every `git push` to the connected branch redeploys automatically, same as any other
+   Vercel project.
+
+**Local testing before you push:** install the Vercel CLI once (`npm i -g vercel`),
+then run `vercel dev` from this folder. It emulates the same `api/` routing Vercel uses
+in production. Either run `vercel env pull` first (pulls the env vars you set in the
+dashboard into a local `.env.development.local` file) or create your own `.env` from
+`.env.example` — `vercel dev` reads it automatically.
+
+**Before putting this in front of real farmers:** there's no rate limiting on
+`/api/chat` — anyone who can reach the URL can call it, and every call costs API
+credit. Consider Vercel's Edge Config, a KV store, or a service like Upstash Ratelimit
+to cap usage per visitor. This is called out again in the comments at the top of
+`api/chat.js`.
+
+## Self-hosting instead of Vercel (alternative)
+
+If you'd rather run this on a platform that keeps a persistent Node process alive
+(Render, Railway, a VPS) instead of Vercel's serverless model, use `server.js` instead
+of the `api/` folder:
+
+1. `cd` into this folder, `npm install express cors dotenv` (not included by default
+   since the Vercel path needs no dependencies).
+2. `cp .env.example .env` and put your real `ANTHROPIC_API_KEY` in it.
+3. `node server.js` — runs the backend on `http://localhost:8787` (override with `PORT`).
+4. Point the frontend at it by adding, **before** the existing `<script>` tag in
+   `Kolos_Funding_Advisor.html`:
    ```html
    <script>window.KOLOS_API_BASE = 'https://your-backend.example.com';</script>
    ```
-
-Before putting this in front of real farmers, add rate limiting and tighten
-`KOLOS_ALLOWED_ORIGIN` in `.env` to your actual frontend's origin — the reference
-server accepts unlimited requests from any origin by default, and every request costs
-API credit. This is called out again in comments at the top of `server.js`.
 
 ## Features added
 

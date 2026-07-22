@@ -1,4 +1,12 @@
 /**
+ * NOTE: superseded for the GitHub + Vercel deployment path by
+ * api/chat.js and api/healthz.js, which do the same job as Vercel
+ * serverless functions (Vercel doesn't run a persistent Express server
+ * from a repo by default). Keep this file only if you plan to self-host
+ * on a platform that runs a long-lived Node process (e.g. Render,
+ * Railway, a VPS) instead of Vercel. Deploying to Vercel? Ignore this
+ * file — it is not used there.
+ *
  * Kolos backend proxy — minimal reference implementation.
  *
  * Why this file exists: the original Kolos_Funding_Advisor.html called

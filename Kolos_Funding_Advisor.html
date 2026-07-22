@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kolos — Funding Advisor for Ukrainian Farmers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B2B2B;
+    --teal:#147575;
+    --teal-dark:#0F5C5C;
+    --teal-tint:#E8F3F0;
+    --cream:#F3EFDD;
+    --panel:#FCFAF2;
+    --gold:#A8801F;
+    --gold-tint:#F6EED9;
+    --success:#1E8E52;
+    --warning:#B4740E;
+    --error:#B23A2E;
+    --line:#DED6B4;
+    --grey-500:#8A8266;
+    --grey-700:#5A6B60;
+    --radius:14px;
+    --font-display:'Space Grotesk',system-ui,sans-serif;
+    --font-body:'Inter',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:var(--font-body);
+    background:var(--cream);
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  /* ===== Header ===== */
+  header{
+    background:var(--teal);
+    color:#fff;
+    padding:18px 22px 16px;
+    flex:0 0 auto;
+  }
+  .header-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    max-width:820px;
+    margin:0 auto;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand-mark{
+    width:38px;height:38px;flex:0 0 auto;
+    border-radius:10px;
+    background:rgba(255,255,255,0.12);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .brand-mark svg{width:22px;height:22px;}
+  .brand-text h1{
+    font-family:var(--font-display);
+    font-size:20px;
+    font-weight:700;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  .brand-text p{
+    margin:1px 0 0;
+    font-size:12.5px;
+    color:rgba(255,255,255,0.78);
+    font-weight:500;
+  }
+  .header-tag{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:rgba(255,255,255,0.68);
+    border:1px solid rgba(255,255,255,0.3);
+    padding:4px 9px;
+    border-radius:20px;
+    white-space:nowrap;
+  }
+  .header-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .ghost-btn{
+    background:none;
+    border:1px solid rgba(255,255,255,0.35);
+    color:#fff;
+    font-family:var(--font-body);
+    font-size:12.5px;
+    font-weight:600;
+    padding:6px 12px;
+    border-radius:20px;
+    cursor:pointer;
+    transition:background 0.15s ease;
+  }
+  .ghost-btn:hover{background:rgba(255,255,255,0.14);}
+  .ghost-btn:focus-visible, .send-btn:focus-visible, .chip:focus-visible, #input:focus-visible{
+    outline:2px solid var(--gold); outline-offset:2px;
+  }
+  .lang-toggle{display:flex; border:1px solid rgba(255,255,255,0.35); border-radius:20px; overflow:hidden;}
+  .lang-toggle button{
+    background:none; border:none; color:rgba(255,255,255,0.75);
+    font-family:var(--font-mono); font-size:11.5px; font-weight:600;
+    padding:6px 11px; cursor:pointer;
+  }
+  .lang-toggle button.active{background:rgba(255,255,255,0.22); color:#fff;}
+
+  /* ===== Main scroll area ===== */
+  main{
+    flex:1 1 auto;
+    overflow-y:auto;
+    padding:26px 18px 10px;
+  }
+  .thread{
+    max-width:820px;
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+
+  /* ===== Welcome ===== */
+  .welcome{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:26px 26px 22px;
+  }
+  .welcome-eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--gold);
+    margin:0 0 8px;
+  }
+  .welcome h2{
+    font-family:var(--font-display);
+    font-size:22px;
+    line-height:1.3;
+    margin:0 0 10px;
+    color:var(--ink);
+  }
+  .welcome p{
+    font-size:14.5px;
+    line-height:1.6;
+    color:var(--grey-700);
+    margin:0 0 20px;
+    max-width:60ch;
+  }
+  .chip-grid{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .chip{
+    font-family:var(--font-body);
+    font-size:13px;
+    font-weight:500;
+    color:var(--teal-dark);
+    background:var(--teal-tint);
+    border:1px solid #C7DEDA;
+    padding:9px 14px;
+    border-radius:20px;
+    cursor:pointer;
+    transition:background 0.15s ease, transform 0.1s ease;
+    text-align:left;
+  }
+  .chip:hover{background:#DCEEEA;}
+  .chip:active{transform:scale(0.98);}
+
+  /* ===== Farm profile panel ===== */
+  .profile-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px 20px;
+  }
+  .profile-toggle{
+    display:flex; align-items:center; justify-content:space-between;
+    width:100%; background:none; border:none; cursor:pointer;
+    font-family:var(--font-body); font-size:14px; font-weight:600; color:var(--teal-dark);
+    padding:0;
+  }
+  .profile-toggle svg{width:14px;height:14px; transition:transform 0.15s ease;}
+  .profile-toggle.open svg{transform:rotate(180deg);}
+  .profile-body{display:none; margin-top:14px;}
+  .profile-body.open{display:block;}
+  .profile-hint{font-size:12.5px; color:var(--grey-700); margin:0 0 12px;}
+  .profile-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:10px;}
+  .profile-field label{display:block; font-size:11.5px; font-weight:600; color:var(--grey-700); margin-bottom:4px;}
+  .profile-field input, .profile-field select{
+    width:100%; font-family:var(--font-body); font-size:13.5px;
+    padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);
+  }
+  .profile-actions{display:flex; gap:8px; margin-top:14px;}
+  .profile-actions button{
+    font-family:var(--font-body); font-size:12.5px; font-weight:600;
+    padding:7px 14px; border-radius:16px; cursor:pointer; border:1.5px solid var(--teal);
+  }
+  .profile-save{background:var(--teal); color:#fff;}
+  .profile-clear{background:none; color:var(--teal-dark);}
+  .profile-saved-note{font-size:11.5px; color:var(--success); margin-top:8px; display:none;}
+  .profile-saved-note.show{display:block;}
+
+  /* ===== Messages ===== */
+  .msg-row{display:flex; gap:10px;}
+  .msg-row.user{justify-content:flex-end;}
+  .avatar{
+    width:30px;height:30px;flex:0 0 auto;
+    border-radius:9px;
+    background:var(--teal);
+    display:flex;align-items:center;justify-content:center;
+    margin-top:2px;
+  }
+  .avatar svg{width:16px;height:16px;}
+  .bubble{
+    max-width:78%;
+    padding:14px 16px;
+    border-radius:var(--radius);
+    font-size:14.5px;
+    line-height:1.62;
+  }
+  .msg-row.user .bubble{
+    background:var(--teal);
+    color:#fff;
+    border-bottom-right-radius:4px;
+  }
+  .msg-row.agent .bubble{
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-bottom-left-radius:4px;
+  }
+  .bubble p{margin:0 0 10px;}
+  .bubble p:last-child{margin-bottom:0;}
+  .bubble ul{margin:0 0 10px; padding-left:20px;}
+  .bubble li{margin-bottom:5px;}
+  .bubble strong{color:var(--teal-dark); font-weight:700;}
+  .msg-row.user .bubble strong{color:#fff;}
+  .bubble a{color:var(--teal-dark); text-decoration:underline; text-decoration-color:#B7D4CE;}
+  .msg-row.user .bubble a{color:#fff; text-decoration-color:rgba(255,255,255,0.55);}
+
+  /* ===== Sources ledger ===== */
+  .sources{
+    margin-top:12px;
+    border-top:1px dashed var(--line);
+    padding-top:10px;
+  }
+  .sources-toggle{
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    color:var(--gold);
+    background:none;
+    border:none;
+    padding:0;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    font-weight:500;
+  }
+  .sources-toggle svg{width:10px;height:10px;transition:transform 0.15s ease;}
+  .sources-toggle.open svg{transform:rotate(90deg);}
+  .source-list{
+    display:none;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:9px;
+  }
+  .source-list.open{display:flex;}
+  .source-chip{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--grey-700);
+    background:var(--gold-tint);
+    border:1px solid #E5D6A8;
+    padding:5px 9px;
+    border-radius:6px;
+    text-decoration:none;
+    max-width:220px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    display:inline-block;
+  }
+  .source-chip:hover{background:#F0E2BC;}
+
+  /* ===== Typing indicator ===== */
+  .typing .bubble{display:flex; align-items:center; gap:5px; padding:16px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--grey-500); animation:bounce 1.2s infinite ease-in-out;}
+  .dot:nth-child(2){animation-delay:0.15s;}
+  .dot:nth-child(3){animation-delay:0.3s;}
+  @keyframes bounce{0%,60%,100%{transform:translateY(0); opacity:0.5;} 30%{transform:translateY(-4px); opacity:1;}}
+
+  .error-note{
+    font-size:13px;
+    color:var(--error);
+    background:#FBEBE8;
+    border:1px solid #F0C6BE;
+    border-radius:10px;
+    padding:10px 14px;
+  }
+
+  /* ===== Footer / input ===== */
+  footer{
+    flex:0 0 auto;
+    background:var(--panel);
+    border-top:1px solid var(--line);
+    padding:14px 18px 16px;
+  }
+  .input-wrap{
+    max-width:820px;
+    margin:0 auto;
+  }
+  .input-row{
+    display:flex;
+    gap:10px;
+    align-items:flex-end;
+  }
+  #input{
+    flex:1;
+    font-family:var(--font-body);
+    font-size:15px;
+    line-height:1.4;
+    padding:12px 14px;
+    border:1.5px solid var(--line);
+    border-radius:12px;
+    resize:none;
+    max-height:120px;
+    background:#fff;
+    color:var(--ink);
+  }
+  #input:focus{border-color:var(--teal); outline:none;}
+  .send-btn{
+    flex:0 0 auto;
+    background:var(--teal);
+    color:#fff;
+    border:none;
+    width:44px;height:44px;
+    border-radius:12px;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:background 0.15s ease;
+  }
+  .send-btn:hover:not(:disabled){background:var(--teal-dark);}
+  .send-btn:disabled{opacity:0.45; cursor:not-allowed;}
+  .send-btn svg{width:18px;height:18px;}
+  .disclaimer{
+    font-size:11.5px;
+    color:var(--grey-500);
+    margin:9px 2px 0;
+    line-height:1.5;
+  }
+
+  ::-webkit-scrollbar{width:9px;}
+  ::-webkit-scrollbar-thumb{background:#CFC6A0; border-radius:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  @media print{
+    header .header-actions, footer, .profile-panel, .chip-grid{display:none !important;}
+    body{background:#fff;}
+    main{overflow:visible;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20"/>
+          <path d="M12 6c-2.5 0-4-1.5-4-1.5S9 8 12 8s4-3.5 4-3.5S14.5 6 12 6Z"/>
+          <path d="M12 10c-2.5 0-4-1.5-4-1.5S9 12 12 12s4-3.5 4-3.5S14.5 10 12 10Z"/>
+          <path d="M12 14c-2.5 0-4-1.5-4-1.5S9 16 12 16s4-3.5 4-3.5S14.5 14 12 14Z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>Kolos</h1>
+        <p id="tagline">Funding &amp; grant advisor for Ukrainian farmers</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="header-tag">by PanTerrea</span>
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button id="langEn" class="active" data-lang="en">EN</button>
+        <button id="langUk" data-lang="uk">UA</button>
+      </div>
+      <button class="ghost-btn" id="exportBtn">Export chat</button>
+      <button class="ghost-btn" id="resetBtn">New chat</button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <div class="thread" id="thread">
+    <div class="profile-panel" id="profilePanel">
+      <button class="profile-toggle" id="profileToggle">
+        <span id="profileToggleLabel">Tell Kolos about your farm (optional)</span>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+      <div class="profile-body" id="profileBody">
+        <p class="profile-hint" id="profileHint">Kolos will factor these details into its search and answer.</p>
+        <div class="profile-grid">
+          <div class="profile-field">
+            <label id="lblRegion" for="fRegion">Region / oblast</label>
+            <input type="text" id="fRegion" placeholder="e.g. Poltava oblast">
+          </div>
+          <div class="profile-field">
+            <label id="lblSector" for="fSector">Main activity</label>
+            <select id="fSector"></select>
+          </div>
+          <div class="profile-field">
+            <label id="lblSize" for="fSize">Business size</label>
+            <select id="fSize"></select>
+          </div>
+        </div>
+        <div class="profile-actions">
+          <button class="profile-save" id="profileSave">Save details</button>
+          <button class="profile-clear" id="profileClear">Clear</button>
+        </div>
+        <p class="profile-saved-note" id="profileSavedNote">Saved — Kolos will use this context.</p>
+      </div>
+    </div>
+
+    <div class="welcome" id="welcome">
+      <p class="welcome-eyebrow" id="welcomeEyebrow">Kolos · грант та фінансова підтримка</p>
+      <h2 id="welcomeHeading">Ask about grants, subsidies, loans and reconstruction funding for Ukrainian farms.</h2>
+      <p id="welcomeIntro">Kolos searches the web for current programmes from the Ukrainian government, EU accession funds, EBRD, World Bank and other donors — and shows exactly where each answer comes from.</p>
+      <div class="chip-grid" id="chipGrid"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="input-wrap">
+    <div class="input-row">
+      <textarea id="input" rows="1" placeholder="Ask Kolos about grants or financial support…" aria-label="Ask a question"></textarea>
+      <button class="send-btn" id="sendBtn" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+    <p class="disclaimer" id="disclaimer">Kolos searches the web for current information but can make mistakes and is not a substitute for professional financial or legal advice. Always confirm eligibility, deadlines and application details directly with the funding body before applying.</p>
+  </div>
+</footer>
+
+<script>
+/* =========================================================================
+   IMPORTANT — backend requirement
+   This front-end no longer calls api.anthropic.com directly. Calling the
+   Anthropic API from client-side JS would require embedding an API key in
+   code every visitor's browser can read, which leaks the key immediately.
+   Instead this file POSTs to a same-origin (or configured) backend route,
+   /api/chat, which holds the API key server-side. See server.js / README.md
+   for a minimal reference implementation of that backend.
+   Set window.KOLOS_API_BASE before this script runs to point at a different
+   deployed backend origin, e.g. <script>window.KOLOS_API_BASE='https://your-backend.example.com';</script>
+========================================================================= */
+const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
+
+const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
+
+Your job is to help farmers and agribusinesses identify grants, subsidies, low-interest loans, reconstruction funding, and other financial support they may be eligible for — from Ukrainian government schemes (Ministry of Agrarian Policy / Ministry of Economy, Diia and State Agrarian Registry programmes, oblast-level programmes), international donors and lenders (EU accession funds and the Ukraine Facility, EBRD, World Bank, IFC, UNDP, FAO), and other credible sources.
+
+Rules you must follow:
+- Always search the web for current programme information before answering. Funding programmes open, close and change frequently, especially in wartime Ukraine — never rely on memory alone for programme names, amounts or deadlines.
+- Be specific: name the actual programme, the funding body, eligibility criteria, amount available, application deadline if known, and where to apply or learn more.
+- If a programme's deadline or current status is uncertain from your search, say so clearly rather than guessing.
+- Prioritise currently open or upcoming programmes over closed ones, but you may mention a recently closed programme if a new round is expected or likely.
+- Write for a working farmer, not a policy analyst: keep answers practical, concrete and scannable. Use short paragraphs and bullet points for programme details. Explain any acronym the first time you use it.
+- If a question falls outside Ukrainian agricultural financial support, briefly and politely redirect to what you can help with.
+- You are not a lawyer or financial advisor and cannot guarantee any application will be approved — say so when relevant, especially around eligibility.
+- Never invent programme names, figures, deadlines or URLs. If you cannot find reliable current information on something, say so honestly instead of filling the gap.
+- Keep the tone warm, direct and respectful of the person's time — many people asking are running a farm, not researching policy for a living.
+- USAID's role in Ukraine changed substantially after 2025 (most programmes were cut and remaining functions folded into the U.S. State Department). Do not describe USAID as a routinely open funding channel unless your search confirms a current, specific programme — flag this uncertainty explicitly if asked about US government funding.
+- EBRD, World Bank and IFC support to individual farmers is usually indirect (via partner banks, leasing companies, or the state budget) rather than a grant a farmer applies for directly — make that distinction clear so farmers know who to actually contact.`;
+
+const UI = {
+  en: {
+    tagline: "Funding & grant advisor for Ukrainian farmers",
+    eyebrow: "Kolos · funding & financial support",
+    heading: "Ask about grants, subsidies, loans and reconstruction funding for Ukrainian farms.",
+    intro: "Kolos searches the web for current programmes from the Ukrainian government, EU accession funds, EBRD, World Bank and other donors — and shows exactly where each answer comes from.",
+    chips: [
+      { q: "What Ukrainian government grants are currently open for small and medium farms?", label: "Ukrainian government grants open now" },
+      { q: "What EU accession and reconstruction funding is available for Ukrainian agriculture right now?", label: "EU & reconstruction funding" },
+      { q: "What EBRD or World Bank financing programmes support Ukrainian farmers right now?", label: "EBRD / World Bank programmes" },
+      { q: "Are there grants specifically for livestock, dairy or genetics businesses in Ukraine?", label: "Livestock & dairy grants" },
+      { q: "What low-interest loan schemes exist for buying farm machinery or equipment in Ukraine?", label: "Machinery & equipment loans" },
+      { q: "Are there grants for women-led or veteran-led farms in Ukraine?", label: "Women-led / veteran-led farm grants" },
+    ],
+    placeholder: "Ask Kolos about grants or financial support…",
+    disclaimer: "Kolos searches the web for current information but can make mistakes and is not a substitute for professional financial or legal advice. Always confirm eligibility, deadlines and application details directly with the funding body before applying.",
+    newChat: "New chat",
+    exportBtn: "Export chat",
+    profileToggle: "Tell Kolos about your farm (optional)",
+    profileHint: "Kolos will factor these details into its search and answer.",
+    regionLabel: "Region / oblast",
+    regionPlaceholder: "e.g. Poltava oblast",
+    sectorLabel: "Main activity",
+    sizeLabel: "Business size",
+    saveProfile: "Save details",
+    clearProfile: "Clear",
+    savedNote: "Saved — Kolos will use this context.",
+    sectorOptions: ["Crops / grain", "Livestock / dairy", "Horticulture / orchards / vineyards", "Greenhouse / vegetables", "Mixed farming", "Other"],
+    sizeOptions: ["Small (household / individual farm)", "Medium (registered SME)", "Large / cooperative"],
+    langCode: "English",
+    errNetwork: "Kolos could not reach the network. Check your connection and try again.",
+    errRequest: "Kolos ran into a problem: ",
+    errUnexpected: "Kolos received an unexpected response. Please try again.",
+    errNoAnswer: "Kolos could not find a clear answer that time. Try rephrasing your question.",
+    exportEmpty: "There is no conversation to export yet.",
+  },
+  uk: {
+    tagline: "Порадник із грантів та фінансової підтримки для українських фермерів",
+    eyebrow: "Kolos · гранти та фінансова підтримка",
+    heading: "Запитайте про гранти, субсидії, кредити та кошти на відбудову для українських господарств.",
+    intro: "Kolos шукає в інтернеті актуальні програми від уряду України, фондів ЄС, ЄБРР, Світового банку та інших донорів — і показує, звідки саме кожна відповідь.",
+    chips: [
+      { q: "Які державні гранти зараз доступні для малих і середніх господарств?", label: "Державні гранти зараз доступні" },
+      { q: "Яке фінансування ЄС та кошти на відбудову доступні для українського сільського господарства зараз?", label: "Фінансування ЄС та відбудова" },
+      { q: "Які програми фінансування ЄБРР чи Світового банку зараз підтримують українських фермерів?", label: "Програми ЄБРР / Світового банку" },
+      { q: "Чи є гранти саме для тваринництва, молочного бізнесу чи генетики в Україні?", label: "Гранти для тваринництва" },
+      { q: "Які пільгові кредитні програми існують для купівлі сільгосптехніки в Україні?", label: "Кредити на техніку" },
+      { q: "Чи є гранти для господарств, якими керують жінки або ветерани?", label: "Гранти для жінок / ветеранів" },
+    ],
+    placeholder: "Запитайте Kolos про гранти чи фінансову підтримку…",
+    disclaimer: "Kolos шукає актуальну інформацію в інтернеті, але може помилятися і не замінює професійну фінансову чи юридичну консультацію. Завжди перевіряйте право на участь, дедлайни та деталі заявки безпосередньо у фонду підтримки перед поданням заявки.",
+    newChat: "Новий чат",
+    exportBtn: "Експортувати чат",
+    profileToggle: "Розкажіть Kolos про своє господарство (необов'язково)",
+    profileHint: "Kolos враховуватиме ці дані у пошуку та відповіді.",
+    regionLabel: "Область / регіон",
+    regionPlaceholder: "напр. Полтавська область",
+    sectorLabel: "Основна діяльність",
+    sizeLabel: "Розмір господарства",
+    saveProfile: "Зберегти",
+    clearProfile: "Очистити",
+    savedNote: "Збережено — Kolos використає цей контекст.",
+    sectorOptions: ["Рослинництво / зернові", "Тваринництво / молочне", "Садівництво / виноградарство", "Теплиці / овочівництво", "Змішане господарство", "Інше"],
+    sizeOptions: ["Мале (особисте селянське господарство)", "Середнє (зареєстроване МСП)", "Велике / кооператив"],
+    langCode: "Ukrainian",
+    errNetwork: "Kolos не зміг з'єднатися з мережею. Перевірте підключення і спробуйте ще раз.",
+    errRequest: "Kolos зіткнувся з проблемою: ",
+    errUnexpected: "Kolos отримав неочікувану відповідь. Спробуйте ще раз.",
+    errNoAnswer: "Цього разу Kolos не знайшов чіткої відповіді. Спробуйте переформулювати питання.",
+    exportEmpty: "Поки що немає розмови для експорту.",
+  }
+};
+
+const STORAGE_KEY = 'kolos_state_v1';
+
+let lang = 'en';
+let conversation = []; // {role:'user'|'assistant', text, sources?}
+let profile = { region:'', sector:'', size:'' };
+let isLoading = false;
+
+const threadEl = document.getElementById('thread');
+const welcomeEl = document.getElementById('welcome');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const mainEl = document.getElementById('main');
+const resetBtn = document.getElementById('resetBtn');
+const exportBtn = document.getElementById('exportBtn');
+const langEnBtn = document.getElementById('langEn');
+const langUkBtn = document.getElementById('langUk');
+
+const profileToggle = document.getElementById('profileToggle');
+const profileBody = document.getElementById('profileBody');
+const fRegion = document.getElementById('fRegion');
+const fSector = document.getElementById('fSector');
+const fSize = document.getElementById('fSize');
+const profileSaveBtn = document.getElementById('profileSave');
+const profileClearBtn = document.getElementById('profileClear');
+const profileSavedNote = document.getElementById('profileSavedNote');
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatMessage(raw){
+  const escaped = escapeHtml(raw);
+  const paragraphs = escaped.split(/\n\s*\n/);
+  let html = '';
+  paragraphs.forEach(para => {
+    const lines = para.split('\n').map(l => l.trim()).filter(Boolean);
+    const isList = lines.length > 0 && lines.every(l => /^[-*•]\s+/.test(l));
+    if (isList) {
+      html += '<ul>' + lines.map(l => '<li>' + inlineFormat(l.replace(/^[-*•]\s+/, '')) + '</li>').join('') + '</ul>';
+    } else if (lines.length) {
+      html += '<p>' + lines.map(inlineFormat).join('<br>') + '</p>';
+    }
+  });
+  return html || '<p></p>';
+}
+
+function inlineFormat(text){
+  let t = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/(https?:\/\/[^\s<]+)/g, url => {
+    const clean = url.replace(/[.,;:)]+$/, '');
+    return '<a href="' + clean + '" target="_blank" rel="noopener noreferrer">' + clean + '</a>';
+  });
+  return t;
+}
+
+function domainFromUrl(url){
+  try { return new URL(url).hostname.replace(/^www\./, ''); }
+  catch(e){ return url; }
+}
+
+function scrollToBottom(){
+  requestAnimationFrame(() => { mainEl.scrollTop = mainEl.scrollHeight; });
+}
+
+function agentIconSvg(){
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v18"/><path d="M12 7c-2.2 0-3.5-1.3-3.5-1.3S9.5 8.7 12 8.7s3.5-3 3.5-3S14.2 7 12 7Z"/>
+    <path d="M12 12c-2.2 0-3.5-1.3-3.5-1.3S9.5 13.7 12 13.7s3.5-3 3.5-3S14.2 12 12 12Z"/></svg>`;
+}
+
+function renderUserMessage(text){
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  row.innerHTML = `<div class="bubble">${formatMessage(text)}</div>`;
+  threadEl.appendChild(row);
+  scrollToBottom();
+}
+
+function renderTyping(){
+  const row = document.createElement('div');
+  row.className = 'msg-row agent typing';
+  row.id = 'typingRow';
+  row.innerHTML = `
+    <div class="avatar">${agentIconSvg()}</div>
+    <div class="bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+  threadEl.appendChild(row);
+  scrollToBottom();
+}
+
+function removeTyping(){
+  const el = document.getElementById('typingRow');
+  if (el) el.remove();
+}
+
+function renderAgentMessage(text, sources){
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  const uid = 'src_' + Math.random().toString(36).slice(2, 9);
+
+  let sourcesHtml = '';
+  if (sources && sources.length){
+    const chips = sources.slice(0, 12).map(s =>
+      `<a class="source-chip" href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(s.title || s.url)}">${escapeHtml(s.title || domainFromUrl(s.url))}</a>`
+    ).join('');
+    sourcesHtml = `
+      <div class="sources">
+        <button class="sources-toggle" data-target="${uid}">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
+          Sources (${sources.length})
+        </button>
+        <div class="source-list" id="${uid}">${chips}</div>
+      </div>`;
+  }
+
+  row.innerHTML = `
+    <div class="avatar">${agentIconSvg()}</div>
+    <div class="bubble">${formatMessage(text)}${sourcesHtml}</div>`;
+  threadEl.appendChild(row);
+
+  const toggle = row.querySelector('.sources-toggle');
+  if (toggle){
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('open');
+      document.getElementById(uid).classList.toggle('open');
+    });
+  }
+  scrollToBottom();
+}
+
+function renderError(msg){
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML = `<div class="avatar">${agentIconSvg()}</div><div class="bubble"><div class="error-note">${escapeHtml(msg)}</div></div>`;
+  threadEl.appendChild(row);
+  scrollToBottom();
+}
+
+function extractResponse(content){
+  let text = '';
+  const sourcesMap = new Map();
+
+  content.forEach(block => {
+    if (block.type === 'text'){
+      text += block.text;
+      if (Array.isArray(block.citations)){
+        block.citations.forEach(c => {
+          if (c.url) sourcesMap.set(c.url, { url: c.url, title: c.title || '' });
+        });
+      }
+    }
+    if (block.type === 'web_search_tool_result' && Array.isArray(block.content)){
+      block.content.forEach(r => {
+        if (r.url) sourcesMap.set(r.url, { url: r.url, title: r.title || '' });
+      });
+    }
+  });
+
+  return { text: text.trim(), sources: Array.from(sourcesMap.values()) };
+}
+
+function buildSystemPrompt(){
+  let sys = BASE_SYSTEM_PROMPT;
+  sys += `\n\nRespond in ${lang === 'uk' ? 'Ukrainian' : 'English'} unless the farmer's latest message is clearly written in the other language, in which case respond in that language instead.`;
+  if (profile.region || profile.sector || profile.size){
+    sys += `\n\nContext about the farmer you are advising (only use this to tailor relevance, do not restate it back verbatim as a greeting every time): `;
+    const parts = [];
+    if (profile.region) parts.push(`region/oblast: ${profile.region}`);
+    if (profile.sector) parts.push(`main activity: ${profile.sector}`);
+    if (profile.size) parts.push(`business size: ${profile.size}`);
+    sys += parts.join('; ') + '.';
+  }
+  return sys;
+}
+
+async function sendMessage(text){
+  if (!text || !text.trim() || isLoading) return;
+
+  if (welcomeEl) { welcomeEl.remove(); }
+
+  isLoading = true;
+  sendBtn.disabled = true;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  conversation.push({ role: 'user', text });
+  renderUserMessage(text);
+  renderTyping();
+  persistState();
+
+  try {
+    const response = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: buildSystemPrompt(),
+        max_tokens: 1200,
+        messages: conversation.map(m => ({ role: m.role, content: m.text })),
+      })
+    });
+
+    const data = await response.json();
+    removeTyping();
+
+    if (!response.ok) {
+      const errMsg = (data && data.error && data.error.message) ? data.error.message : 'Request failed.';
+      renderError(UI[lang].errRequest + errMsg);
+      conversation.pop();
+      persistState();
+      return;
+    }
+
+    if (!data.content || !Array.isArray(data.content)) {
+      renderError(UI[lang].errUnexpected);
+      conversation.pop();
+      persistState();
+      return;
+    }
+
+    const { text: replyText, sources } = extractResponse(data.content);
+
+    if (!replyText) {
+      renderError(UI[lang].errNoAnswer);
+      conversation.pop();
+      persistState();
+      return;
+    }
+
+    conversation.push({ role: 'assistant', text: replyText, sources });
+    renderAgentMessage(replyText, sources);
+    persistState();
+
+  } catch (err) {
+    removeTyping();
+    renderError(UI[lang].errNetwork);
+    conversation.pop();
+    persistState();
+  } finally {
+    isLoading = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+}
+
+/* ===== Language ===== */
+function applyLanguage(){
+  const t = UI[lang];
+  document.documentElement.lang = lang === 'uk' ? 'uk' : 'en';
+  document.getElementById('tagline').textContent = t.tagline;
+  document.getElementById('welcomeEyebrow').textContent = t.eyebrow;
+  document.getElementById('welcomeHeading').textContent = t.heading;
+  document.getElementById('welcomeIntro').textContent = t.intro;
+  document.getElementById('resetBtn').textContent = t.newChat;
+  document.getElementById('exportBtn').textContent = t.exportBtn;
+  document.getElementById('profileToggleLabel').textContent = t.profileToggle;
+  document.getElementById('profileHint').textContent = t.profileHint;
+  document.getElementById('lblRegion').textContent = t.regionLabel;
+  fRegion.placeholder = t.regionPlaceholder;
+  document.getElementById('lblSector').textContent = t.sectorLabel;
+  document.getElementById('lblSize').textContent = t.sizeLabel;
+  document.getElementById('profileSave').textContent = t.saveProfile;
+  document.getElementById('profileClear').textContent = t.clearProfile;
+  inputEl.placeholder = t.placeholder;
+  document.getElementById('disclaimer').textContent = t.disclaimer;
+
+  fSector.innerHTML = t.sectorOptions.map((opt, i) => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
+  fSize.innerHTML = t.sizeOptions.map((opt, i) => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
+  if (profile.sector) fSector.value = profile.sector;
+  if (profile.size) fSize.value = profile.size;
+
+  const chipGrid = document.getElementById('chipGrid');
+  chipGrid.innerHTML = t.chips.map(c => `<button class="chip" data-q="${escapeHtml(c.q)}">${escapeHtml(c.label)}</button>`).join('');
+
+  langEnBtn.classList.toggle('active', lang === 'en');
+  langUkBtn.classList.toggle('active', lang === 'uk');
+}
+
+langEnBtn.addEventListener('click', () => { lang = 'en'; applyLanguage(); persistState(); });
+langUkBtn.addEventListener('click', () => { lang = 'uk'; applyLanguage(); persistState(); });
+
+/* ===== Farm profile panel ===== */
+profileToggle.addEventListener('click', () => {
+  profileToggle.classList.toggle('open');
+  profileBody.classList.toggle('open');
+});
+
+profileSaveBtn.addEventListener('click', () => {
+  profile = { region: fRegion.value.trim(), sector: fSector.value, size: fSize.value };
+  profileSavedNote.textContent = UI[lang].savedNote;
+  profileSavedNote.classList.add('show');
+  persistState();
+  setTimeout(() => profileSavedNote.classList.remove('show'), 3000);
+});
+
+profileClearBtn.addEventListener('click', () => {
+  profile = { region:'', sector:'', size:'' };
+  fRegion.value = '';
+  fSector.selectedIndex = 0;
+  fSize.selectedIndex = 0;
+  persistState();
+});
+
+/* ===== Persistence ===== */
+function persistState(){
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ lang, conversation, profile }));
+  } catch (e) { /* localStorage unavailable (private mode, quota, etc.) — conversation just won't persist */ }
+}
+
+function restoreState(){
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
+  catch (e) { saved = null; }
+  if (!saved) return;
+
+  lang = saved.lang === 'uk' ? 'uk' : 'en';
+  profile = saved.profile && typeof saved.profile === 'object' ? saved.profile : { region:'', sector:'', size:'' };
+  conversation = Array.isArray(saved.conversation) ? saved.conversation : [];
+
+  if (profile.region) fRegion.value = profile.region;
+
+  if (conversation.length){
+    if (welcomeEl) welcomeEl.remove();
+    conversation.forEach(m => {
+      if (m.role === 'user') renderUserMessage(m.text);
+      else renderAgentMessage(m.text, m.sources || []);
+    });
+  }
+}
+
+/* ===== Export ===== */
+exportBtn.addEventListener('click', () => {
+  if (!conversation.length){
+    alert(UI[lang].exportEmpty);
+    return;
+  }
+  let out = `Kolos — ${new Date().toLocaleString()}\n${'='.repeat(40)}\n\n`;
+  conversation.forEach(m => {
+    out += (m.role === 'user' ? 'You' : 'Kolos') + ':\n' + m.text + '\n';
+    if (m.sources && m.sources.length){
+      out += '\nSources:\n' + m.sources.map(s => '- ' + (s.title ? s.title + ' — ' : '') + s.url).join('\n') + '\n';
+    }
+    out += '\n' + '-'.repeat(40) + '\n\n';
+  });
+  const blob = new Blob([out], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'kolos-conversation-' + new Date().toISOString().slice(0,10) + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+/* ===== Wiring ===== */
+sendBtn.addEventListener('click', () => sendMessage(inputEl.value));
+
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendMessage(inputEl.value);
+  }
+});
+
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+});
+
+document.getElementById('chipGrid').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (chip) sendMessage(chip.dataset.q);
+});
+
+resetBtn.addEventListener('click', () => {
+  conversation = [];
+  try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+  location.reload();
+});
+
+/* ===== Init ===== */
+restoreState();
+applyLanguage();
+inputEl.focus();
+</script>
+</body>
+</html>

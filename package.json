@@ -1,9 +1,0 @@
-{
-  "name": "kolos-funding-advisor",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Kolos Funding Advisor: static frontend + Vercel serverless API routes (api/chat.js, api/healthz.js) that proxy to the Anthropic API, keeping the API key server-side.",
-  "engines": {
-    "node": ">=18"
-  }
-}

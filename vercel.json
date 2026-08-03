@@ -1,5 +1,11 @@
 {
+  "framework": null,
   "rewrites": [
     { "source": "/", "destination": "/Kolos_Funding_Advisor.html" }
-  ]
+  ],
+  "functions": {
+    "api/chat.js": {
+      "maxDuration": 60
+    }
+  }
 }

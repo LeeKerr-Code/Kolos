@@ -461,10 +461,16 @@
    Anthropic API from client-side JS would require embedding an API key in
    code every visitor's browser can read, which leaks the key immediately.
    Instead this file POSTs to a same-origin (or configured) backend route,
-   /api/chat, which holds the API key server-side. See server.js / README.md
-   for a minimal reference implementation of that backend.
+   /api/chat, which holds the API key server-side. That backend is
+   api/chat.js in this repo (a Vercel serverless function). There is
+   deliberately no server.js — see HANDOVER.md section 7.
    Set window.KOLOS_API_BASE before this script runs to point at a different
-   deployed backend origin, e.g. <script>window.KOLOS_API_BASE='https://your-backend.example.com';</script>
+   deployed backend origin, e.g.
+     <script>window.KOLOS_API_BASE='https://your-backend.example.com';<\/script>
+   NOTE the escaped closing tag above. A literal </ script > sequence inside
+   this comment would terminate the <script> element here — the HTML parser
+   does not know it is inside a JS comment — and silently kill the entire
+   application. That was a real bug in this file; do not un-escape it.
 ========================================================================= */
 const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
@@ -483,21 +489,133 @@ Rules you must follow:
 - Never invent programme names, figures, deadlines or URLs. If you cannot find reliable current information on something, say so honestly instead of filling the gap.
 - Keep the tone warm, direct and respectful of the person's time — many people asking are running a farm, not researching policy for a living.
 - USAID's role in Ukraine changed substantially after 2025 (most programmes were cut and remaining functions folded into the U.S. State Department). Do not describe USAID as a routinely open funding channel unless your search confirms a current, specific programme — flag this uncertainty explicitly if asked about US government funding.
-- EBRD, World Bank and IFC support to individual farmers is usually indirect (via partner banks, leasing companies, or the state budget) rather than a grant a farmer applies for directly — make that distinction clear so farmers know who to actually contact.`;
+- EBRD, World Bank and IFC support to individual farmers is usually indirect (via partner banks, leasing companies, or the state budget) rather than a grant a farmer applies for directly — make that distinction clear so farmers know who to actually contact.
+
+HOW TO USE THE PROGRAMME REFERENCE BELOW
+You are given a reference list of programmes compiled from web search and last verified on 22 July 2026. It exists so you know WHICH programmes to look for and WHO administers them. It is not a source of current fact. These rules are absolute:
+1. Never state an amount, percentage, deadline, application window, allocation total or disbursement figure taken from the reference. Every such number in your answer must come from a search you performed in THIS conversation turn. If your search does not confirm a figure, do not give one — say the figure needs checking with the funding body and give the farmer the link to check.
+2. Entries marked [EXPIRED] refer to windows that had already closed when the reference was compiled. Never present them as open. You may mention that the programme exists and that a further cycle may follow, but you must say the cited round has closed.
+3. Entries marked [STATUS UNVERIFIED] had opened at some point before 22 July 2026 with no confirmed closing date. Treat them as "may or may not still be open" and search before saying either way.
+4. The reference is not exhaustive. Absence from it is not evidence a programme does not exist. Oblast-level and niche programmes (beekeeping, organic certification) were never systematically searched.
+5. If your live search contradicts the reference, the search wins and you should say the reference is out of date.
+6. Use the reference's programme names, administering bodies and portals as search terms. Searching "State Agrarian Registry livestock subsidy 2026" is far better than searching "Ukraine farm grants".`;
+
+/* Reference compiled 22 July 2026 from Ukraine_Farm_Funding_Reference_Brief.docx.
+   Volatile fields are retained verbatim from that document at the project owner's
+   direction. They are governed by the rules above and must never be quoted as
+   current without live confirmation. To refresh: re-verify each entry, update the
+   date on the next line, and re-mark the [EXPIRED] / [STATUS UNVERIFIED] tags. */
+const PROGRAMME_REFERENCE = `PROGRAMME REFERENCE — compiled from web search, last verified 22 July 2026. Read the rules above before using any of it.
+
+=== 1. UKRAINIAN GOVERNMENT PROGRAMMES ===
+
+1.1 Horticulture, berry, viticulture, greenhouse and storage grants [STATUS UNVERIFIED]
+Body: Ministry of Economy, Environment and Agriculture. Apply via: Diia portal.
+For: orchards, berry farms, vineyards, greenhouses, vegetable/fruit storage facilities.
+Reported: up to UAH 7 million per project, up to 70% of project costs, up to 80% in de-occupied or frontline territories. Greenhouse/horticulture applications resumed via Diia on 2 February 2026. Storage-facility grant rules amended by the Cabinet of Ministers on 22 April 2026.
+Sources: en.interfax.com.ua/news/economic/1177210.html · east-fruit.com · proagroukraine.com
+
+1.2 Livestock per-head subsidies — cattle, goats, sheep [STATUS UNVERIFIED]
+Body: Ministry of Economy, Environment and Agriculture. Apply via: State Agrarian Registry (NOT Diia).
+Reported: UAH 7,000 per head for farmers with 3–100 cows at any productivity level; UAH 2,000 per head for 5–500 breeding goats and/or sheep. Applications announced as open on 7 April 2026. Open regardless of whether the business received this subsidy in 2022–2025.
+Sources: english.nv.ua/nation/50598382.html · open4business.com.ua
+
+1.3 Livestock farm construction reimbursement [STATUS UNVERIFIED]
+For: partial reimbursement of construction costs for cattle-raising farms.
+Reported: rate raised from 25% to 50% of total construction cost for farms in frontline areas, by Cabinet of Ministers decision in November 2025.
+Source: agronews.ua
+
+1.4 Domestic machinery and equipment compensation [STATUS UNVERIFIED]
+For: partial compensation on purchases of Ukrainian-made agricultural machinery and equipment.
+Reported: 25% nationwide; 40% where more than 80% of the producer's land is in frontline/combat areas. UAH 1.8 billion allocated for the 2026 programme. First 2026 round paid UAH 126.1 million to 382 producers.
+Source: proagroukraine.com
+
+1.5 Fertilizer purchase subsidy [STATUS UNVERIFIED]
+For: non-repayable aid toward Ukrainian-made complex mineral fertilizers. Apply via: State Agrarian Register.
+Reported: up to UAH 1,000 per hectare, capped at 7 tonnes per 100 hectares.
+Sources: agronews.ua · agroreview.com
+
+1.6 Land reclamation / irrigation compensation [STATUS UNVERIFIED]
+Reported: maximum compensation raised to over UAH 30,000 per hectare nationwide and over UAH 48,000 per hectare in frontline territories.
+Source: agronews.ua
+
+1.7 Affordable Loans 5-7-9% [STATUS UNVERIFIED]
+Body: Cabinet of Ministers of Ukraine. Apply via: partner banks, not the government directly.
+For: state-subsidised low-interest loans to micro, small and medium businesses — working capital, machinery, land, real-estate reconstruction, solar power. Includes a 0% "energy loan" up to UAH 10 million over up to 3 years for cogeneration units, generators and energy equipment, and 0.1% loans for the first two years for businesses restoring war-damaged property.
+Reported: agriculture is about 30% of all loans issued. Concessional term for agricultural producers extended to 31 March 2027. Over UAH 500 billion attracted programme-wide to date. 35% of new 2026 loans issued in frontline regions.
+Source: kmu.gov.ua
+
+=== 2. EUROPEAN UNION ===
+
+2.1 Ukraine Facility 2024–2027 — CONTEXT ONLY, NOT FARMER-FACING
+Body: European Union. A macro instrument channelled through the Ukrainian government and financial institutions. A farmer does not apply to it. Mention only to explain where matching EU money for smaller programmes originates.
+Reported: €50 billion total (€33bn loans, €17bn grants). €7.2 billion planned for 2026, €2.52 billion for 2027. As of 26 June 2026, seven regular payments approved and €42 billion mobilised. A further €1.5 billion package aimed at unlocking €3.4 billion of new investment across energy, education, connectivity, agriculture and small business.
+Sources: commission.europa.eu · voxukraine.org
+
+2.2 FAO–EU grant cycles [EXPIRED — both 2026 intakes closed]
+Body: UN Food and Agriculture Organization, financed by the European Union, delivered via Ukraine's Ministry of Economy. Apply via: State Agrarian Registry.
+For: equipment, green technology and processing-capacity investment for small-scale producers, small agricultural enterprises and cooperatives.
+Reported: up to UAH 440,500 (about USD 10,000) for small-scale producers; up to UAH 1,101,250 (about USD 25,000) for micro/small enterprises, cooperatives and geographical-indication producer associations. This was the fourth cycle.
+CLOSED: the aggregation-models intake closed 17 April 2026 and the second intake closed 14 June 2026. Both were region-restricted. Never present these dates as open. A fifth cycle may follow — direct the farmer to watch the State Agrarian Registry and search for a current cycle.
+Sources: eeas.europa.eu · tridge.com
+
+=== 3. INTERNATIONAL FINANCIAL INSTITUTIONS — MOSTLY INDIRECT ===
+
+3.1 EBRD [STATUS UNVERIFIED]
+A farmer approaches a partner bank or leasing company, not the EBRD. New Horizons is a technical-cooperation programme for the agri-food system (alternative protein, sustainable intensive agriculture). Lending and leasing flows through partners such as OTP Leasing, covering machinery, working capital, land and reconstruction.
+Reported: €2.9 billion deployed in Ukraine in 2025, up from €2.4bn in 2024. €40 million direct loan to MHP with a further €60 million in parallel/B-lender financing.
+Sources: ebrd.com · interfax.com.ua
+
+3.2 World Bank / URTF — ARISE [STATUS UNVERIFIED, LIKELY NOT OPEN]
+ARISE (Agriculture Recovery Inclusive Support Emergency) combined a USD 230 million World Bank loan with a USD 320 million URTF grant, of which roughly USD 50 million was earmarked for grants to agricultural producers.
+The June 2026 USD 3.39 billion First Ukraine Jobs and Private Sector Growth Development Policy Operation is budget support, NOT a farmer-facing grant window — do not present it as one. Whether any ARISE-style producer grant window is currently open was NOT confirmed when this reference was compiled. Verify on the World Bank Ukraine country page before citing any window as open.
+Source: worldbank.org/en/country/ukraine
+
+3.3 IFC — Economic Resilience Action (ERA) [STATUS UNVERIFIED]
+SME and agribusiness finance delivered largely through partner banks and leasing companies, e.g. a €50 million risk-sharing facility with OTP Leasing launched August 2025.
+Reported: USD 2.8 billion committed by February 2026 including over USD 1 billion mobilised from donors; about USD 970 million raised from donor governments as of April 2026.
+Source: ifc.org
+
+=== 4. USAID — TREAT AS NOT AVAILABLE UNLESS SEARCH PROVES OTHERWISE ===
+In 2025 USAID was largely dismantled as a standalone agency and its remaining functions folded into the State Department. A review reportedly cut about 83% of USAID programmes, and some Ukraine-specific grant agreements including the Ukraine Energy Support Fund were terminated outright.
+Historical only: the AGRI-Ukraine / AGRO initiative launched July 2022 had, before the 2025 restructuring, reached over 15,000 farmers (about 34% of Ukraine's agricultural producers) and mobilised over USD 510 million, of which USD 350 million was US government money. Do not present this as current.
+No source found confirms any farmer-facing AGRI-Ukraine/AGRO window is open. Congress passed a USD 50 billion foreign-aid bill in February 2026 and the State Department announced USD 25 million for Ukrainian children's programmes in March 2026, neither of which is farmer-facing agricultural funding.
+Sources: devex.com · kyivindependent.com
+
+=== 5. WOMEN-LED AND VETERAN-LED FARMS ===
+
+5.1 REDpreneur Women [STATUS UNVERIFIED]
+Body: Ukrainian Red Cross Society with the Austrian Red Cross, Ukraine's Ministry of Veterans Affairs and the Ukrainian Veteran Foundation, supported by Austria's NACHBAR IN NOT fund and the Austrian Development Agency.
+For: women veterans starting or growing a business, including agriculture and food production.
+Reported: €7,000 per grantee. 23 women veterans funded in a round reported April 2026.
+Sources: redcross.org.ua · en.interfax.com.ua
+
+5.2 Priority weighting inside general government grants
+Government start-up and agricultural grants are reported to give priority to veteran-owned, relocated, IDP-run and frontline-region businesses, and to young entrepreneurs. No dedicated separate application track for these groups was confirmed beyond REDpreneur Women. Verify eligibility weighting with the Ministry of Economy or Diia before telling a farmer they have priority status.
+
+=== 6. OBLAST AND LOCAL PROGRAMMES ===
+Individual oblasts and city/district military administrations run their own smaller grant programmes on top of national ones. Amounts and rules vary by region and change often. Two illustrative examples only:
+- Dnipropetrovsk region: a regional programme reported for spring 2026 offering agricultural grants up to UAH 38,000. Source: 112.ua
+- Siverskodonetsk city military administration: publishes a periodically updated list of support programmes for agricultural producers in its area. Source: sed-rada.gov.ua
+IMPORTANT: whenever a farmer names their oblast, search that oblast's own economic-development page and its city or district military administration page. Local programmes are frequently absent from national coverage and this reference does not list them.`;
 
 const UI = {
   en: {
     tagline: "Funding & grant advisor for Ukrainian farmers",
     eyebrow: "Kolos · funding & financial support",
     heading: "Ask about grants, subsidies, loans and reconstruction funding for Ukrainian farms.",
-    intro: "Kolos searches the web for current programmes from the Ukrainian government, EU accession funds, EBRD, World Bank and other donors — and shows exactly where each answer comes from.",
+    intro: "Tell Kolos your situation and it searches for what is currently open, who administers it, and how to apply. Every answer shows exactly where the information came from.",
     chips: [
-      { q: "What Ukrainian government grants are currently open for small and medium farms?", label: "Ukrainian government grants open now" },
-      { q: "What EU accession and reconstruction funding is available for Ukrainian agriculture right now?", label: "EU & reconstruction funding" },
-      { q: "What EBRD or World Bank financing programmes support Ukrainian farmers right now?", label: "EBRD / World Bank programmes" },
-      { q: "Are there grants specifically for livestock, dairy or genetics businesses in Ukraine?", label: "Livestock & dairy grants" },
-      { q: "What low-interest loan schemes exist for buying farm machinery or equipment in Ukraine?", label: "Machinery & equipment loans" },
-      { q: "Are there grants for women-led or veteran-led farms in Ukraine?", label: "Women-led / veteran-led farm grants" },
+      { q: "My farm is in a frontline or recently de-occupied area. What extra support, higher co-financing rates or better terms am I eligible for?", label: "My farm is in a frontline area" },
+      { q: "My farm buildings and equipment were damaged by shelling or occupation. What grants or low-interest loans are available to rebuild?", label: "Rebuilding after war damage" },
+      { q: "What support is available for buying a generator, cogeneration unit or other energy equipment for my farm?", label: "Generators & energy equipment" },
+      { q: "What subsidies or compensation can I get toward fertilizer and other inputs this season?", label: "Fertilizer & inputs this season" },
+      { q: "What grants are available for building vegetable or fruit storage, cold storage, or processing capacity?", label: "Storage, cold chain & processing" },
+      { q: "What compensation and low-interest loans are available for buying farm machinery and equipment in Ukraine?", label: "Machinery & equipment" },
+      { q: "What livestock subsidies and grants are available, per head of cattle, goats or sheep, and how do I apply?", label: "Livestock & dairy" },
+      { q: "I run a small household farm. What grants and subsidies am I actually eligible for as a small-scale producer?", label: "I run a small household farm" },
+      { q: "Are there grants for women-led or veteran-led farms in Ukraine?", label: "Women-led / veteran-led farms" },
+      { q: "What registrations and documents do I need before applying for farm grants in Ukraine, and which portal do I use for which programme, Diia or the State Agrarian Registry?", label: "What do I need to apply?" },
     ],
     placeholder: "Ask Kolos about grants or financial support…",
     disclaimer: "Kolos searches the web for current information but can make mistakes and is not a substitute for professional financial or legal advice. Always confirm eligibility, deadlines and application details directly with the funding body before applying.",
@@ -525,14 +643,18 @@ const UI = {
     tagline: "Порадник із грантів та фінансової підтримки для українських фермерів",
     eyebrow: "Kolos · гранти та фінансова підтримка",
     heading: "Запитайте про гранти, субсидії, кредити та кошти на відбудову для українських господарств.",
-    intro: "Kolos шукає в інтернеті актуальні програми від уряду України, фондів ЄС, ЄБРР, Світового банку та інших донорів — і показує, звідки саме кожна відповідь.",
+    intro: "Розкажіть Kolos про свою ситуацію, і він знайде, що зараз відкрито, хто це адмініструє і як подати заявку. Кожна відповідь показує, звідки взята інформація.",
     chips: [
-      { q: "Які державні гранти зараз доступні для малих і середніх господарств?", label: "Державні гранти зараз доступні" },
-      { q: "Яке фінансування ЄС та кошти на відбудову доступні для українського сільського господарства зараз?", label: "Фінансування ЄС та відбудова" },
-      { q: "Які програми фінансування ЄБРР чи Світового банку зараз підтримують українських фермерів?", label: "Програми ЄБРР / Світового банку" },
-      { q: "Чи є гранти саме для тваринництва, молочного бізнесу чи генетики в Україні?", label: "Гранти для тваринництва" },
-      { q: "Які пільгові кредитні програми існують для купівлі сільгосптехніки в Україні?", label: "Кредити на техніку" },
-      { q: "Чи є гранти для господарств, якими керують жінки або ветерани?", label: "Гранти для жінок / ветеранів" },
+      { q: "Моє господарство розташоване у прифронтовій або нещодавно деокупованій зоні. Яку додаткову підтримку, вищі ставки співфінансування чи кращі умови я можу отримати?", label: "Господарство у прифронтовій зоні" },
+      { q: "Мої будівлі та техніка постраждали від обстрілів або окупації. Які гранти чи пільгові кредити є на відбудову?", label: "Відбудова після пошкоджень" },
+      { q: "Яка підтримка є на купівлю генератора, когенераційної установки чи іншого енергетичного обладнання для господарства?", label: "Генератори та енергообладнання" },
+      { q: "Які субсидії чи компенсації я можу отримати на добрива та інші ресурси цього сезону?", label: "Добрива та ресурси на сезон" },
+      { q: "Які гранти є на будівництво овоче- чи фруктосховища, холодильних потужностей або переробки?", label: "Зберігання та переробка" },
+      { q: "Які компенсації та пільгові кредити є на купівлю сільгосптехніки й обладнання в Україні?", label: "Техніка та обладнання" },
+      { q: "Які дотації та гранти є для тваринництва, на голову худоби, кіз чи овець, і як їх отримати?", label: "Тваринництво та молочне" },
+      { q: "У мене мале особисте селянське господарство. На які гранти та дотації я реально маю право як дрібний виробник?", label: "Мале селянське господарство" },
+      { q: "Чи є гранти для господарств, якими керують жінки або ветерани?", label: "Гранти для жінок і ветеранів" },
+      { q: "Які реєстрації та документи потрібні, щоб подати заявку на аграрні гранти в Україні, і через який портал подавати, Дія чи Державний аграрний реєстр?", label: "Що потрібно, щоб подати заявку?" },
     ],
     placeholder: "Запитайте Kolos про гранти чи фінансову підтримку…",
     disclaimer: "Kolos шукає актуальну інформацію в інтернеті, але може помилятися і не замінює професійну фінансову чи юридичну консультацію. Завжди перевіряйте право на участь, дедлайни та деталі заявки безпосередньо у фонду підтримки перед поданням заявки.",
@@ -721,7 +843,7 @@ function extractResponse(content){
 }
 
 function buildSystemPrompt(){
-  let sys = BASE_SYSTEM_PROMPT;
+  let sys = BASE_SYSTEM_PROMPT + '\n\n' + PROGRAMME_REFERENCE;
   sys += `\n\nRespond in ${lang === 'uk' ? 'Ukrainian' : 'English'} unless the farmer's latest message is clearly written in the other language, in which case respond in that language instead.`;
   if (profile.region || profile.sector || profile.size){
     sys += `\n\nContext about the farmer you are advising (only use this to tailor relevance, do not restate it back verbatim as a greeting every time): `;
@@ -732,6 +854,19 @@ function buildSystemPrompt(){
     sys += parts.join('; ') + '.';
   }
   return sys;
+}
+
+/* The whole conversation used to be resent on every turn, so turn ten paid for
+   all nine turns before it. Only the last few exchanges carry useful context
+   for a funding question, so we send a trailing window instead. The API
+   requires the first message to be from the user, hence the shift loop —
+   slicing blindly can leave an assistant message first and the request 400s. */
+const MAX_HISTORY_MESSAGES = 8; // four exchanges
+
+function buildMessages(){
+  const window = conversation.slice(-MAX_HISTORY_MESSAGES);
+  while (window.length && window[0].role !== 'user') window.shift();
+  return window.map(m => ({ role: m.role, content: m.text }));
 }
 
 async function sendMessage(text){
@@ -756,7 +891,7 @@ async function sendMessage(text){
       body: JSON.stringify({
         system: buildSystemPrompt(),
         max_tokens: 1200,
-        messages: conversation.map(m => ({ role: m.role, content: m.text })),
+        messages: buildMessages(),
       })
     });
 

@@ -226,6 +226,72 @@ function check(name, cond, detail) {
   check('no follow-ups parsed when the marker is absent', fb.count === 0, fb);
   check('a fixed funnel fallback exists so chips are never empty', fb.fallback >= 3, fb);
 
+  // --- Links inside the answer: the whole point of this feature
+  const links = await page.evaluate(() => {
+    const render = (raw) => { const d = document.createElement('div'); d.innerHTML = formatMessage(raw); return d; };
+
+    const md = render('Apply through the [State Agrarian Registry](https://dar.gov.ua/apply) before sowing.');
+    const a = md.querySelector('a');
+
+    const bare = render('See https://diia.gov.ua/grants for details.');
+    const bareA = bare.querySelector('a');
+
+    const evil = render('Click [here](javascript:alert(1)) now.');
+    const data = render('Or [this](data:text/html,<script>x</script>) one.');
+
+    const mixed = render('Use [Diia](https://diia.gov.ua) or go to https://kmu.gov.ua directly.');
+
+    const paren = render('Read the [rules](https://example.gov.ua/a?b=1&c=2) first.');
+
+    return {
+      mdText: a && a.textContent,
+      mdHref: a && a.getAttribute('href'),
+      mdTarget: a && a.getAttribute('target'),
+      mdRel: a && a.getAttribute('rel'),
+      mdNoRawBrackets: !md.textContent.includes('[') && !md.textContent.includes(']('),
+      bareHref: bareA && bareA.getAttribute('href'),
+      evilLinks: evil.querySelectorAll('a').length,
+      evilText: evil.textContent,
+      dataLinks: data.querySelectorAll('a').length,
+      mixedCount: mixed.querySelectorAll('a').length,
+      mixedHrefs: [...mixed.querySelectorAll('a')].map(x => x.getAttribute('href')),
+      parenHref: paren.querySelector('a') && paren.querySelector('a').getAttribute('href'),
+    };
+  });
+
+  check('markdown link renders as a real link on readable words',
+    links.mdText === 'State Agrarian Registry' && links.mdHref === 'https://dar.gov.ua/apply', links);
+  check('no raw markdown brackets left in the answer', links.mdNoRawBrackets === true, links.mdText);
+  check('links open in a new tab, safely',
+    links.mdTarget === '_blank' && /noopener/.test(links.mdRel), links);
+  check('bare URLs still linkify', links.bareHref === 'https://diia.gov.ua/grants', links);
+  check('javascript: URL is NOT made clickable', links.evilLinks === 0, links);
+  check('the words survive when the link is rejected',
+    /Click here now/.test(links.evilText), links.evilText);
+  check('data: URL is NOT made clickable', links.dataLinks === 0, links);
+  check('markdown and bare links coexist without corrupting each other',
+    links.mixedCount === 2 &&
+    links.mixedHrefs[0] === 'https://diia.gov.ua' &&
+    links.mixedHrefs[1] === 'https://kmu.gov.ua', links);
+  check('query strings survive escaping intact',
+    links.parenHref === 'https://example.gov.ua/a?b=1&c=2', links.parenHref);
+
+  // Guard against the NUL-byte delimiter regression: an HTML file with raw
+  // control characters in it is liable to be stripped or mangled in transit.
+  const clean = await page.evaluate(async () => {
+    const src = await (await fetch('/')).text();
+    return { nuls: (src.match(/\u0000/g) || []).length,
+             ctrl: (src.match(/[\u0001-\u0008\u000b\u000c\u000e-\u001f]/g) || []).length };
+  });
+  check('served HTML contains no NUL bytes', clean.nuls === 0, clean);
+  check('served HTML contains no stray control characters', clean.ctrl === 0, clean);
+
+  const linkRules = await page.evaluate(() => BASE_SYSTEM_PROMPT);
+  check('prompt tells Kolos to put links beside the action',
+    /put the link right there in the sentence/i.test(linkRules));
+  check('prompt forbids inventing a URL',
+    /Never assemble, guess or complete a URL/i.test(linkRules));
+
   // --- A multi-leg answer can carry more than one [[NEXT]] marker
   const multi = await page.evaluate(() => {
     const r = extractFollowUps(

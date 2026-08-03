@@ -7,9 +7,13 @@ suggestions (§11), env-file defect found on-device (§12),
 pause_turn handling after the first production failure (§13),
 resume ceiling and self-diagnosis (§14),
 guaranteed complete answers (§15),
-prefill rejection and answer salvage (§16).
+prefill rejection and answer salvage (§16),
+inline links in answers (§17).
 **Scope:** assemble the deployable file set, verify it, and record where
 `HANDOVER.md` and `README.md` no longer match what the files actually contain.
+
+**For the current state of the project, read `WAYPOINT.md` first.** This file is
+the full history of what changed and why; the waypoint is where things stand.
 
 Read this alongside `HANDOVER.md`, not instead of it. Where the two disagree,
 this file is newer and each claim below is backed by a test you can re-run.
@@ -159,7 +163,7 @@ kolos/
 ├── test/
 │   ├── test-handler.js          59 checks on the request handlers
 │   ├── test-server.js           60 checks: server.js live, plus deploy config
-│   └── test-frontend.js         88 checks driving the UI in headless Chromium
+│   └── test-frontend.js         101 checks driving the UI in headless Chromium
 └── BUILD_NOTES.md               this file
 ```
 
@@ -1151,3 +1155,72 @@ flagged incomplete even when `stop_reason` looks clean; and every `[[NEXT]]`
 marker is stripped with the last one winning.
 
 Build `2026-08-03.8`.
+
+---
+
+## 17. Links inside the answer
+
+Requirement: when Kolos names an application form or portal, the link belongs in
+the answer next to the instruction, not buried in a collapsed Sources list.
+
+### The app was punishing the right behaviour
+
+`inlineFormat` only linkified bare URLs. A markdown link rendered as literal
+text: `[State Agrarian Registry](https://dar.gov.ua)` appeared on screen exactly
+like that. So if Kolos wrote a link the readable way, the farmer saw brackets
+and a raw URL; if it wrote a bare URL, they saw an unreadable string. Neither is
+usable on a phone.
+
+`inlineFormat` now converts markdown links, and the prompt instructs Kolos to
+write them on the words describing the destination, beside the step they serve.
+
+### Safety, because model output is not trusted input
+
+**Scheme allowlist.** Only `http` and `https` become links. `[click
+here](javascript:alert(1))` would otherwise have produced a working script link
+inside an answer. Rejected links keep their words and lose the anchor.
+
+**Only real URLs.** The prompt forbids assembling, guessing or completing a URL,
+and forbids linking a homepage assumed to exist. A clickable link reads as a
+promise; a wrong one sends a farmer somewhere useless while looking
+authoritative. If the exact URL is not in that turn's search results, Kolos
+names the destination and says how to find it instead.
+
+### Two bugs found by the tests
+
+**Stray bracket.** The URL pattern `[^)\s]+` stops at the first `)`, so
+`[here](javascript:alert(1))` matched only as far as `alert(1` and left a `)`
+in the farmer's answer. The pattern now allows one level of nested parentheses,
+which real URLs contain too.
+
+**NUL bytes in the HTML file.** Markdown links are extracted to placeholders
+before the bare-URL pass, or that pass chews through the `href` of a link just
+built — its pattern stops at `<` but not at a quote. The first placeholder
+implementation used NUL bytes as delimiters, which wrote four raw control
+characters into the deployed HTML. Invisible, and liable to be stripped or
+mangled by anything in the delivery path. Replaced with a plain ASCII sentinel,
+and a test now fetches the served page and asserts it contains no NUL bytes and
+no stray control characters at all.
+
+### Presentation
+
+Links are heavier than body text, underlined at 2px with an offset, and get a
+tint on hover and a focus ring. They are the actionable part of the answer and
+need to survive being read on a phone in a field.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 59 checks
+node test/test-server.js      # 60 checks
+node test/test-frontend.js    # 101 checks
+```
+
+220 checks. New ones: a markdown link becomes a real link on readable words; no
+raw brackets survive; links open in a new tab with `rel="noopener"`; bare URLs
+still work; `javascript:` and `data:` URLs are refused while their words remain;
+markdown and bare links coexist without corrupting each other; query strings
+survive escaping; the served HTML has no NUL or control characters; and the
+prompt carries both the placement rule and the no-invented-URLs rule.
+
+Build `2026-08-03.9`.

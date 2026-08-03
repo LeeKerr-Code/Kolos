@@ -246,8 +246,22 @@
   .bubble li{margin-bottom:5px;}
   .bubble strong{color:var(--teal-dark); font-weight:700;}
   .msg-row.user .bubble strong{color:#fff;}
-  .bubble a{color:var(--teal-dark); text-decoration:underline; text-decoration-color:#B7D4CE;}
+  /* Links are the point of the answer, not a footnote in it. A farmer on a
+     phone needs to see where to apply at a glance and be able to hit it. */
+  .bubble a{
+    color:var(--teal-dark);
+    font-weight:600;
+    text-decoration:underline;
+    text-decoration-thickness:2px;
+    text-underline-offset:3px;
+    text-decoration-color:#8FC2B8;
+    border-radius:3px;
+    transition:background 0.12s ease, text-decoration-color 0.12s ease;
+  }
+  .bubble a:hover{background:var(--teal-tint); text-decoration-color:var(--teal);}
+  .bubble a:focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
   .msg-row.user .bubble a{color:#fff; text-decoration-color:rgba(255,255,255,0.55);}
+  .msg-row.user .bubble a:hover{background:rgba(255,255,255,0.14);}
 
   /* ===== Sources ledger ===== */
   .sources{
@@ -520,7 +534,7 @@ const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
 /* Must match BUILD in api/healthz.js. A test enforces it.
    Check which build is actually live by visiting /api/healthz. */
-const KOLOS_BUILD = '2026-08-03.8';
+const KOLOS_BUILD = '2026-08-03.9';
 console.log('Kolos build ' + KOLOS_BUILD);
 
 const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
@@ -541,6 +555,14 @@ Rules you must follow:
 - EBRD, World Bank and IFC support to individual farmers is usually indirect (via partner banks, leasing companies, or the state budget) rather than a grant a farmer applies for directly — make that distinction clear so farmers know who to actually contact.
 - Never announce that you are about to search, and never promise an answer you have not written yet. Do not open with "let me check", "let me verify these figures first", or "before I lay them out". The farmer sees only your finished reply, so a preamble like that reads as an answer that stops before it starts. Search silently, then give the answer. If after searching you still cannot confirm something, say that plainly in the answer itself.
 - Lead with what the farmer can act on. Open with the programme and whether they look eligible, then the detail. Do not spend the first paragraph restating their question or describing your process.
+
+LINKS — put them in the answer, next to the action
+The farmer must never have to go hunting for where to apply. Whenever you name a portal, an application form, a programme page, a bank list or anywhere else they need to go, put the link right there in the sentence, written as [readable name](https://the-real-url).
+- Write the link on the words that describe the destination: "apply through the [State Agrarian Registry](https://...)", not "apply through the State Agrarian Registry (see sources)" and not a bare URL dumped on its own line.
+- Put it beside the instruction it belongs to, not collected at the bottom. A link three paragraphs from the step it serves is a link the farmer will miss.
+- ONLY link a URL you actually saw in this turn's search results. Never assemble, guess or complete a URL, and never link to a homepage you are assuming exists. A clickable link is read as a promise; a wrong one sends a farmer somewhere useless while looking authoritative.
+- If you know the destination but not the exact URL, name it plainly and say how to find it — "search for 'Diia grants' or ask your bank" — instead of inventing a link.
+- Two or three well-placed links in an answer is right. Fifteen is a link dump nobody reads.
 
 HOW TO USE THE PROGRAMME REFERENCE BELOW
 You are given a reference list of programmes compiled from web search and last verified on 22 July 2026. It exists so you know WHICH programmes to look for and WHO administers them. It is not a source of current fact. These rules are absolute:
@@ -830,14 +852,47 @@ function formatMessage(raw){
   return html || '<p></p>';
 }
 
+/* Only http and https may become a link.
+   Model output is not trusted input: [click here](javascript:...) would
+   otherwise become a working script link inside the answer. */
+function isLinkableUrl(url){
+  return /^https?:\/\//i.test(String(url).trim());
+}
+
 function inlineFormat(text){
+  /* Input is already HTML-escaped by formatMessage, so nothing here re-escapes.
+
+     Order matters: markdown links are pulled out to placeholders BEFORE bare
+     URLs are linkified. Without that, the bare-URL pass would chew through the
+     href of a link this function had just built (its pattern stops at "<" but
+     not at a quote) and corrupt the markup. */
   let t = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  const stash = [];
+
+  /* The URL part allows one level of nested parentheses. A plain [^)]+ stops at
+     the first ")", so "[x](javascript:alert(1))" matched only as far as
+     "alert(1" and left a stray ")" sitting in the farmer's answer. Real URLs
+     contain parentheses too. */
+  t = t.replace(/\[([^\]\n]{1,150})\]\(([^\s()]*(?:\([^\s()]*\)[^\s()]*)*)\)/g,
+    (whole, label, url) => {
+      if (!isLinkableUrl(url)) return label;   // keep the words, drop the link
+      stash.push('<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
+      /* A plain ASCII sentinel. An earlier version used NUL bytes, which put
+         raw control characters into the HTML file itself — invisible, and
+         liable to be stripped or mangled in transit. Nothing here may be
+         matched by the bare-URL pass below, and "@@" has no scheme. */
+      return '@@KOLOSLINK' + (stash.length - 1) + '@@';
+    });
+
   t = t.replace(/(https?:\/\/[^\s<]+)/g, url => {
     const clean = url.replace(/[.,;:)]+$/, '');
     return '<a href="' + clean + '" target="_blank" rel="noopener noreferrer">' + clean + '</a>';
   });
-  return t;
+
+  return t.replace(/@@KOLOSLINK(\d+)@@/g, (m, i) => stash[Number(i)]);
 }
+
 
 function domainFromUrl(url){
   try { return new URL(url).hostname.replace(/^www\./, ''); }

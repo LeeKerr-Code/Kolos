@@ -212,35 +212,49 @@ async function run() {
   }
 
   // ---------- Phase 4: .env loading ----------
-  // Only runs when there is no real .env to clobber.
+  //
+  // The env file is written to a temp directory and pointed at with
+  // KOLOS_ENV_FILE. It is deliberately NOT written into the app folder.
+  //
+  // The first version of this test did write one there and deleted it in a
+  // `finally`. Two ways that bit: a `finally` does not survive the process
+  // being killed, and on a mounted or read-only-ish filesystem the delete
+  // itself fails. Either way a stale .env was left in the app directory, where
+  // it silently overrode real configuration on the next start — observed in
+  // the wild, turning proxy trust on when it should have been off.
   const fsx = require('node:fs');
-  const envPath = path.join(__dirname, '..', '.env');
-  if (fsx.existsSync(envPath)) {
-    console.log('  SKIP  .env loading checks (a real .env exists; not touching it)');
-  } else {
+  const os = require('node:os');
+  const tmpDir = fsx.mkdtempSync(path.join(os.tmpdir(), 'kolos-env-'));
+  const envPath = path.join(tmpDir, 'test.env');
+
+  try {
     fsx.writeFileSync(envPath,
       '# test env\nANTHROPIC_API_KEY=sk-ant-from-dotenv\nKOLOS_TRUST_PROXY=1\nQUOTED="quoted-value"\n');
-    try {
-      srv = start({ ANTHROPIC_API_KEY: undefined });
-      await srv.ready;
-      check('.env is read without --env-file or any dependency',
-        /API key configured\s*:\s*yes/.test(srv.log()), srv.log());
-      check('.env settings reach api/chat.js at module load',
-        /Client IP source\s*:\s*X-Forwarded-For/.test(srv.log()), srv.log());
-      srv.child.kill();
-      await new Promise((r) => srv.child.on('exit', r));
 
-      // A real environment variable must beat the file, or systemd and shell
-      // overrides would silently do nothing.
-      srv = start({ ANTHROPIC_API_KEY: 'sk-ant-real-env', KOLOS_TRUST_PROXY: '0' });
-      await srv.ready;
-      check('real environment variables override .env',
-        /Client IP source\s*:\s*socket address/.test(srv.log()), srv.log());
-      srv.child.kill();
-      await new Promise((r) => srv.child.on('exit', r));
-    } finally {
-      fsx.unlinkSync(envPath);
-    }
+    srv = start({ ANTHROPIC_API_KEY: undefined, KOLOS_ENV_FILE: envPath });
+    await srv.ready;
+    check('env file is read without --env-file or any dependency',
+      /API key configured\s*:\s*yes/.test(srv.log()), srv.log());
+    check('env file settings reach api/chat.js at module load',
+      /Client IP source\s*:\s*X-Forwarded-For/.test(srv.log()), srv.log());
+    srv.child.kill();
+    await new Promise((r) => srv.child.on('exit', r));
+
+    // A real environment variable must beat the file, or systemd and shell
+    // overrides would silently do nothing.
+    srv = start({ ANTHROPIC_API_KEY: 'sk-ant-real-env', KOLOS_TRUST_PROXY: '0', KOLOS_ENV_FILE: envPath });
+    await srv.ready;
+    check('real environment variables override the env file',
+      /Client IP source\s*:\s*socket address/.test(srv.log()), srv.log());
+    srv.child.kill();
+    await new Promise((r) => srv.child.on('exit', r));
+
+    check('the app folder still has no .env after these tests',
+      !fsx.existsSync(path.join(__dirname, '..', '.env')));
+  } finally {
+    // Best effort. Nothing here lives in the app directory, so a failure to
+    // clean up a temp file cannot affect a later run.
+    try { fsx.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* ignore */ }
   }
 
   // ---------- Phase 5: deployment config ----------

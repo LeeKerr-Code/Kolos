@@ -294,12 +294,56 @@
   }
   .source-chip:hover{background:#F0E2BC;}
 
+  /* ===== Follow-up suggestions ===== */
+  .followups{
+    margin-top:14px;
+    border-top:1px dashed var(--line);
+    padding-top:12px;
+  }
+  .followups-label{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.07em;
+    color:var(--gold);
+    margin:0 0 9px;
+  }
+  .followup-grid{display:flex; flex-wrap:wrap; gap:7px;}
+  .followup-chip{
+    font-family:var(--font-body);
+    font-size:12.5px;
+    font-weight:500;
+    line-height:1.35;
+    color:var(--teal-dark);
+    background:var(--teal-tint);
+    border:1px solid #C7DEDA;
+    padding:8px 13px;
+    border-radius:18px;
+    cursor:pointer;
+    text-align:left;
+    transition:background 0.15s ease, transform 0.1s ease;
+  }
+  .followup-chip:hover{background:#DCEEEA;}
+  .followup-chip:active{transform:scale(0.98);}
+  .followup-chip:focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
+
   /* ===== Typing indicator ===== */
   .typing .bubble{display:flex; align-items:center; gap:5px; padding:16px;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--grey-500); animation:bounce 1.2s infinite ease-in-out;}
   .dot:nth-child(2){animation-delay:0.15s;}
   .dot:nth-child(3){animation-delay:0.3s;}
   @keyframes bounce{0%,60%,100%{transform:translateY(0); opacity:0.5;} 30%{transform:translateY(-4px); opacity:1;}}
+
+  .truncation-note{
+    margin-top:12px;
+    font-size:12.5px;
+    line-height:1.5;
+    color:var(--warning);
+    background:var(--gold-tint);
+    border:1px solid #E5D6A8;
+    border-radius:10px;
+    padding:9px 12px;
+  }
 
   .error-note{
     font-size:13px;
@@ -366,7 +410,7 @@
   ::-webkit-scrollbar-track{background:transparent;}
 
   @media print{
-    header .header-actions, footer, .profile-panel, .chip-grid{display:none !important;}
+    header .header-actions, footer, .profile-panel, .chip-grid, .followups{display:none !important;}
     body{background:#fff;}
     main{overflow:visible;}
   }
@@ -474,6 +518,11 @@
 ========================================================================= */
 const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
+/* Must match BUILD in api/healthz.js. A test enforces it.
+   Check which build is actually live by visiting /api/healthz. */
+const KOLOS_BUILD = '2026-08-03.4';
+console.log('Kolos build ' + KOLOS_BUILD);
+
 const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
 
 Your job is to help farmers and agribusinesses identify grants, subsidies, low-interest loans, reconstruction funding, and other financial support they may be eligible for — from Ukrainian government schemes (Ministry of Agrarian Policy / Ministry of Economy, Diia and State Agrarian Registry programmes, oblast-level programmes), international donors and lenders (EU accession funds and the Ukraine Facility, EBRD, World Bank, IFC, UNDP, FAO), and other credible sources.
@@ -490,6 +539,8 @@ Rules you must follow:
 - Keep the tone warm, direct and respectful of the person's time — many people asking are running a farm, not researching policy for a living.
 - USAID's role in Ukraine changed substantially after 2025 (most programmes were cut and remaining functions folded into the U.S. State Department). Do not describe USAID as a routinely open funding channel unless your search confirms a current, specific programme — flag this uncertainty explicitly if asked about US government funding.
 - EBRD, World Bank and IFC support to individual farmers is usually indirect (via partner banks, leasing companies, or the state budget) rather than a grant a farmer applies for directly — make that distinction clear so farmers know who to actually contact.
+- Never announce that you are about to search, and never promise an answer you have not written yet. Do not open with "let me check", "let me verify these figures first", or "before I lay them out". The farmer sees only your finished reply, so a preamble like that reads as an answer that stops before it starts. Search silently, then give the answer. If after searching you still cannot confirm something, say that plainly in the answer itself.
+- Lead with what the farmer can act on. Open with the programme and whether they look eligible, then the detail. Do not spend the first paragraph restating their question or describing your process.
 
 HOW TO USE THE PROGRAMME REFERENCE BELOW
 You are given a reference list of programmes compiled from web search and last verified on 22 July 2026. It exists so you know WHICH programmes to look for and WHO administers them. It is not a source of current fact. These rules are absolute:
@@ -638,6 +689,14 @@ const UI = {
     errUnexpected: "Kolos received an unexpected response. Please try again.",
     errNoAnswer: "Kolos could not find a clear answer that time. Try rephrasing your question.",
     exportEmpty: "There is no conversation to export yet.",
+    truncated: "This answer was cut off before Kolos finished writing it. Treat it as incomplete — ask again, or ask a narrower question.",
+    nextStepsLabel: "Next steps",
+    followUpFallback: [
+      "Am I eligible for this?",
+      "What documents and registrations do I need first?",
+      "How and where do I apply?",
+      "What if I do not qualify?",
+    ],
   },
   uk: {
     tagline: "Порадник із грантів та фінансової підтримки для українських фермерів",
@@ -677,8 +736,44 @@ const UI = {
     errUnexpected: "Kolos отримав неочікувану відповідь. Спробуйте ще раз.",
     errNoAnswer: "Цього разу Kolos не знайшов чіткої відповіді. Спробуйте переформулювати питання.",
     exportEmpty: "Поки що немає розмови для експорту.",
+    truncated: "Цю відповідь обірвано, Kolos не завершив її. Вважайте її неповною — запитайте ще раз або звузьте питання.",
+    nextStepsLabel: "Наступні кроки",
+    followUpFallback: [
+      "Чи маю я право на це?",
+      "Які документи та реєстрації потрібні спершу?",
+      "Як і куди подавати заявку?",
+      "А якщо я не проходжу за критеріями?",
+    ],
   }
 };
+
+/* Follow-up suggestions.
+   Placed last in the system prompt because output-format instructions get
+   followed more reliably at the end than buried in the middle.
+
+   The design intent: a farmer who has just been told three programmes exist is
+   not short of topics, they are stuck on "does this apply to me and what do I
+   do now". So follow-ups move DOWN a funnel (discovery -> eligibility ->
+   documents -> applying -> fallback), never sideways into more browsing.
+
+   Note the prohibition on figures. Chip text sits outside the answer body, so
+   it would otherwise escape the rule that no amount or deadline may be stated
+   without live confirmation. A chip is a claim like any other sentence. */
+const FOLLOWUP_INSTRUCTIONS = `ENDING EVERY ANSWER
+
+After your answer, always add a final line in exactly this format:
+
+[[NEXT]] first suggestion || second suggestion || third suggestion
+
+Rules for that line:
+- Two or three suggestions. Never more, never zero.
+- Write each as the farmer would say it, first person, short enough to read on a phone button. "Am I eligible for the livestock subsidy?" not "Eligibility criteria for livestock subsidies".
+- Move the farmer FORWARD, not sideways. The useful progression is: what exists -> am I eligible -> what documents do I need -> where and when do I apply -> what if I do not qualify. Pick the next step from wherever this answer left them. Do not suggest more topics to browse when they are ready to check eligibility.
+- NEVER put an amount, percentage, deadline or date in a suggestion. You may name a programme. "Check if I qualify for the machinery compensation" is fine; "Apply before 30 September" is not, and neither is "the UAH 7,000 per head subsidy".
+- If your answer was that the farmer probably does NOT qualify for something, at least one suggestion must point at an alternative they might qualify for, or at where local and regional programmes are listed. Never leave a farmer with no next move.
+- If the farmer has not told you their oblast and a regional programme could plausibly apply, one suggestion may invite them to say where they farm.
+- Write the suggestions in the same language as your answer.
+- Put this line at the very end, after everything else including any links. Write nothing after it.`;
 
 const STORAGE_KEY = 'kolos_state_v1';
 
@@ -706,10 +801,17 @@ const profileSaveBtn = document.getElementById('profileSave');
 const profileClearBtn = document.getElementById('profileClear');
 const profileSavedNote = document.getElementById('profileSavedNote');
 
+/* Escapes for BOTH text and attribute contexts.
+   textContent -> innerHTML escapes & < > but NOT quotes, because quotes need no
+   escaping in a text node. Several of these values land inside HTML attributes
+   (title="...", and previously data-q="..."), where an unescaped double quote
+   breaks out of the attribute and allows injection. That mattered little when
+   every value came from this file; it matters now that search-result titles
+   and model-generated follow-ups pass through here. */
 function escapeHtml(str){
   const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function formatMessage(raw){
@@ -776,7 +878,59 @@ function removeTyping(){
   if (el) el.remove();
 }
 
-function renderAgentMessage(text, sources){
+/* Suggestions live only under the newest answer. Leaving a chip row under every
+   historical message turns a long conversation into a wall of stale buttons,
+   and invites clicks on a next step that stopped being the next step four
+   answers ago. */
+function clearFollowUps(){
+  threadEl.querySelectorAll('.followups').forEach(el => el.remove());
+}
+
+function renderFollowUps(row, followUps){
+  const list = (followUps && followUps.length) ? followUps : UI[lang].followUpFallback;
+  if (!list.length) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'followups';
+
+  const label = document.createElement('p');
+  label.className = 'followups-label';
+  label.textContent = UI[lang].nextStepsLabel;
+  wrap.appendChild(label);
+
+  const grid = document.createElement('div');
+  grid.className = 'followup-grid';
+
+  /* Text is attached via a JS property rather than a data- attribute. The
+     strings are model-generated, and keeping them out of the HTML string
+     entirely removes any question of attribute escaping. */
+  list.forEach(q => {
+    const btn = document.createElement('button');
+    btn.className = 'followup-chip';
+    btn.type = 'button';
+    btn.textContent = q;
+    btn.addEventListener('click', () => sendMessage(q));
+    grid.appendChild(btn);
+  });
+
+  wrap.appendChild(grid);
+  row.querySelector('.bubble').appendChild(wrap);
+}
+
+/* A truncated answer must never be presented as a finished one.
+   The API can stop a turn early (max_tokens, or a pause the server could not
+   resume within its budget). Kolos is used to make money decisions, so an
+   answer that stops mid-thought while looking complete is worse than an
+   outright error: nothing tells the reader anything is missing. */
+function renderTruncationNote(row){
+  const note = document.createElement('div');
+  note.className = 'truncation-note';
+  note.textContent = UI[lang].truncated;
+  row.querySelector('.bubble').appendChild(note);
+}
+
+function renderAgentMessage(text, sources, followUps, truncated){
+  clearFollowUps();
   const row = document.createElement('div');
   row.className = 'msg-row agent';
   const uid = 'src_' + Math.random().toString(36).slice(2, 9);
@@ -808,6 +962,8 @@ function renderAgentMessage(text, sources){
       document.getElementById(uid).classList.toggle('open');
     });
   }
+  if (truncated) renderTruncationNote(row);
+  renderFollowUps(row, followUps);
   scrollToBottom();
 }
 
@@ -817,6 +973,31 @@ function renderError(msg){
   row.innerHTML = `<div class="avatar">${agentIconSvg()}</div><div class="bubble"><div class="error-note">${escapeHtml(msg)}</div></div>`;
   threadEl.appendChild(row);
   scrollToBottom();
+}
+
+/* Pull the [[NEXT]] line off the end of an answer.
+   Returns the answer with that line removed plus the suggestions, so the marker
+   never reaches the screen, the export file, or localStorage.
+
+   Deliberately forgiving: the marker is stripped wherever it appears, not just
+   at the end, because a half-followed instruction that leaks "[[NEXT]]" into a
+   farmer's answer looks worse than showing no suggestions at all. If nothing
+   parses, callers fall back to the fixed funnel chips — a chat that shows
+   suggestions most of the time and nothing the rest reads as broken. */
+const FOLLOWUP_MARKER = /\n*\[\[NEXT\]\][^\n]*/i;
+
+function extractFollowUps(text){
+  const match = text.match(FOLLOWUP_MARKER);
+  if (!match) return { text: text.trim(), followUps: [] };
+
+  const followUps = match[0]
+    .replace(/\n*\[\[NEXT\]\]/i, '')
+    .split('||')
+    .map(s => s.trim())
+    .filter(s => s.length > 1 && s.length <= 120)
+    .slice(0, 3);
+
+  return { text: text.replace(FOLLOWUP_MARKER, '').trim(), followUps };
 }
 
 function extractResponse(content){
@@ -839,11 +1020,12 @@ function extractResponse(content){
     }
   });
 
-  return { text: text.trim(), sources: Array.from(sourcesMap.values()) };
+  const cleaned = extractFollowUps(text);
+  return { text: cleaned.text, followUps: cleaned.followUps, sources: Array.from(sourcesMap.values()) };
 }
 
 function buildSystemPrompt(){
-  let sys = BASE_SYSTEM_PROMPT + '\n\n' + PROGRAMME_REFERENCE;
+  let sys = BASE_SYSTEM_PROMPT + '\n\n' + PROGRAMME_REFERENCE + '\n\n' + FOLLOWUP_INSTRUCTIONS;
   sys += `\n\nRespond in ${lang === 'uk' ? 'Ukrainian' : 'English'} unless the farmer's latest message is clearly written in the other language, in which case respond in that language instead.`;
   if (profile.region || profile.sector || profile.size){
     sys += `\n\nContext about the farmer you are advising (only use this to tailor relevance, do not restate it back verbatim as a greeting every time): `;
@@ -878,6 +1060,7 @@ async function sendMessage(text){
   sendBtn.disabled = true;
   inputEl.value = '';
   inputEl.style.height = 'auto';
+  clearFollowUps();
 
   conversation.push({ role: 'user', text });
   renderUserMessage(text);
@@ -913,7 +1096,12 @@ async function sendMessage(text){
       return;
     }
 
-    const { text: replyText, sources } = extractResponse(data.content);
+    const { text: replyText, sources, followUps } = extractResponse(data.content);
+
+    // end_turn and stop_sequence mean Claude finished. Anything else means it
+    // was stopped: max_tokens, or a pause the server ran out of resumes for.
+    const truncated = !!data.stop_reason &&
+      data.stop_reason !== 'end_turn' && data.stop_reason !== 'stop_sequence';
 
     if (!replyText) {
       renderError(UI[lang].errNoAnswer);
@@ -922,8 +1110,8 @@ async function sendMessage(text){
       return;
     }
 
-    conversation.push({ role: 'assistant', text: replyText, sources });
-    renderAgentMessage(replyText, sources);
+    conversation.push({ role: 'assistant', text: replyText, sources, followUps, truncated });
+    renderAgentMessage(replyText, sources, followUps, truncated);
     persistState();
 
   } catch (err) {
@@ -1019,7 +1207,7 @@ function restoreState(){
     if (welcomeEl) welcomeEl.remove();
     conversation.forEach(m => {
       if (m.role === 'user') renderUserMessage(m.text);
-      else renderAgentMessage(m.text, m.sources || []);
+      else renderAgentMessage(m.text, m.sources || [], m.followUps || [], m.truncated);
     });
   }
 }

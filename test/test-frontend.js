@@ -14,6 +14,7 @@ const healthz = require(path.join(APP, 'api', 'healthz.js'));
 // Canned Anthropic response: text block with citations + a web_search_tool_result
 // block, i.e. exactly the shape extractResponse() is written against.
 const CANNED = {
+  stop_reason: 'end_turn',
   content: [
     { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: { query: 'Ukraine farm grants' } },
     {
@@ -26,7 +27,7 @@ const CANNED = {
     },
     {
       type: 'text',
-      text: 'Here are two programmes worth checking:\n\n- **Horticulture grant** — up to UAH 1,000,000, apply via Diia.\n- **5-7-9% loans** — via partner banks. https://diia.gov.ua/example\n\nConfirm deadlines with the funding body before applying.',
+      text: 'Here are two programmes worth checking:\n\n- **Horticulture grant** — up to UAH 1,000,000, apply via Diia.\n- **5-7-9% loans** — via partner banks. https://diia.gov.ua/example\n\nConfirm deadlines with the funding body before applying.\n\n[[NEXT]] Am I eligible for the horticulture grant? || What documents do I need for Diia? || What if I don\'t qualify?',
       citations: [
         { type: 'web_search_result_location', url: 'https://www.me.gov.ua/example-grant', title: 'Ministry of Economy — grant programme' },
       ],
@@ -80,6 +81,15 @@ function check(name, cond, detail) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
 
+  /* Wait for N *completed* answers.
+     The obvious condition — counting .msg-row — is wrong, because the typing
+     indicator is itself a .msg-row. Waiting on it returns the moment the
+     spinner appears, before the request has even been sent, which made three
+     assertions race the answer they were about to inspect. */
+  const waitForAnswers = (n) => page.waitForFunction(
+    (want) => document.querySelectorAll('.msg-row.agent:not(.typing)').length >= want,
+    n, { timeout: 15000 });
+
   const consoleErrors = [];
   const pageErrors = [];
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
@@ -122,17 +132,29 @@ function check(name, cond, detail) {
 
   // --- Ask a question via a suggestion chip
   await page.locator('.chip').first().click();
-  await page.locator('.msg-row.agent .bubble').first().waitFor({ timeout: 10000 });
+  await waitForAnswers(1);
 
-  const bubbleText = await page.locator('.msg-row.agent .bubble').first().innerText();
+  const bubbleText = await page.locator('.msg-row.agent:not(.typing) .bubble').first().innerText();
   check('answer text rendered', bubbleText.includes('Horticulture grant'), bubbleText.slice(0, 80));
   check('markdown bold converted to <strong>',
-    (await page.locator('.msg-row.agent .bubble strong').count()) >= 1);
+    (await page.locator('.msg-row.agent:not(.typing) .bubble strong').count()) >= 1);
   check('bullet list converted to <ul><li>',
-    (await page.locator('.msg-row.agent .bubble ul li').count()) === 2,
-    await page.locator('.msg-row.agent .bubble ul li').count());
+    (await page.locator('.msg-row.agent:not(.typing) .bubble ul li').count()) === 2,
+    await page.locator('.msg-row.agent:not(.typing) .bubble ul li').count());
   check('welcome panel removed after first message',
     (await page.locator('#welcome').count()) === 0);
+
+  // --- Follow-up suggestions
+  check('3 follow-up chips rendered under the answer',
+    (await page.locator('.followup-chip').count()) === 3,
+    await page.locator('.followup-chip').count());
+  check('follow-up marker never reaches the visible answer',
+    !bubbleText.includes('[[NEXT]]') && !bubbleText.includes('||'), bubbleText.slice(-120));
+  check('follow-up text is the model\'s, not the fallback',
+    (await page.locator('.followup-chip').first().innerText()).includes('horticulture grant'),
+    await page.locator('.followup-chip').first().innerText());
+  check('next-steps label shown', /Next steps/i.test(
+    await page.locator('.followups-label').first().innerText()));
 
   // --- Source chips: dedup across citations + search results (3 refs -> 2 unique URLs)
   const sourcesLabel = await page.locator('.sources-toggle').first().innerText();
@@ -182,6 +204,81 @@ function check(name, cond, detail) {
   console.log('  info: system prompt is ' + sys.length + ' chars (~' +
     Math.round(sys.length / 3.7) + ' tokens, estimated)');
 
+  // --- Clicking a follow-up asks it, and chips move to the newest answer only
+  await page.locator('.followup-chip').first().click();
+  await waitForAnswers(2);
+  check('clicking a follow-up sends it as a question',
+    lastRequestBody.messages[lastRequestBody.messages.length - 1].content
+      .includes('eligible for the horticulture grant'),
+    lastRequestBody.messages[lastRequestBody.messages.length - 1].content);
+  check('only one follow-up row exists after a second answer',
+    (await page.locator('.followups').count()) === 1,
+    await page.locator('.followups').count());
+  check('the surviving row sits under the newest answer',
+    (await page.locator('.msg-row.agent:not(.typing)').last().locator('.followups').count()) === 1);
+
+  // --- Fallback when the model omits the marker entirely
+  const fb = await page.evaluate(() => {
+    const parsed = extractFollowUps('An answer with no marker at all.');
+    return { text: parsed.text, count: parsed.followUps.length, fallback: UI[lang].followUpFallback.length };
+  });
+  check('answer without a marker parses cleanly', fb.text === 'An answer with no marker at all.', fb);
+  check('no follow-ups parsed when the marker is absent', fb.count === 0, fb);
+  check('a fixed funnel fallback exists so chips are never empty', fb.fallback >= 3, fb);
+
+  // --- Marker stripping is forgiving about placement and case
+  const strip = await page.evaluate(() => [
+    extractFollowUps('Answer.\n\n[[NEXT]] one || two').text,
+    extractFollowUps('Answer.\n[[next]] one || two').text,
+    extractFollowUps('Answer.[[NEXT]] one').text,
+    extractFollowUps('Answer.\n\n[[NEXT]] one || two || three || four').followUps.length,
+    extractFollowUps('Answer.\n\n[[NEXT]] a ||  || valid one').followUps.length,
+  ]);
+  check('marker stripped when preceded by a blank line', strip[0] === 'Answer.', strip[0]);
+  check('marker stripped case-insensitively', strip[1] === 'Answer.', strip[1]);
+  check('marker stripped even when inline', strip[2] === 'Answer.', strip[2]);
+  check('suggestions capped at 3', strip[3] === 3, strip[3]);
+  check('empty and one-character suggestions discarded', strip[4] === 1, strip[4]);
+
+  // --- Model-generated text carrying a quote cannot break out of markup
+  const xss = await page.evaluate(() => {
+    const { followUps } = extractFollowUps('A.\n\n[[NEXT]] say "hello" <img src=x onerror=alert(1)>');
+    return { raw: followUps[0], escaped: escapeHtml(followUps[0]) };
+  });
+  check('escapeHtml now escapes double quotes (attribute-safe)',
+    xss.escaped.includes('&quot;') && !xss.escaped.includes('"'), xss.escaped);
+  check('escapeHtml still neutralises tags', xss.escaped.includes('&lt;img'), xss.escaped);
+
+  // --- A stopped answer must be visibly flagged, never shown as finished
+  const trunc = await page.evaluate(() => {
+    const flag = (sr) => !!sr && sr !== 'end_turn' && sr !== 'stop_sequence';
+    return { end: flag('end_turn'), stop: flag('stop_sequence'),
+             pause: flag('pause_turn'), max: flag('max_tokens'), none: flag(undefined) };
+  });
+  check('end_turn is not treated as truncated', trunc.end === false, trunc);
+  check('stop_sequence is not treated as truncated', trunc.stop === false, trunc);
+  check('pause_turn IS treated as truncated', trunc.pause === true, trunc);
+  check('max_tokens IS treated as truncated', trunc.max === true, trunc);
+  check('a missing stop_reason is not treated as truncated', trunc.none === false, trunc);
+
+  const noteShown = await page.evaluate(() => {
+    const row = document.querySelector('.msg-row.agent:not(.typing)');
+    const before = document.querySelectorAll('.truncation-note').length;
+    renderTruncationNote(row);
+    const after = document.querySelectorAll('.truncation-note').length;
+    const text = document.querySelector('.truncation-note').textContent;
+    document.querySelector('.truncation-note').remove();
+    return { before, after, text };
+  });
+  check('truncation note renders into the answer bubble',
+    noteShown.after === noteShown.before + 1, noteShown);
+  check('truncation note says the answer is incomplete',
+    /incomplete/i.test(noteShown.text), noteShown.text);
+
+  // --- Build marker is visible for checking what is actually deployed
+  const build = await page.evaluate(() => KOLOS_BUILD);
+  check('build marker exposed in the page', /^\d{4}-\d{2}-\d{2}\.\d+$/.test(build), build);
+
   // --- History window: long conversations must not resend everything
   const hist = await page.evaluate(() => {
     const saved = conversation.slice();
@@ -206,9 +303,16 @@ function check(name, cond, detail) {
 
   // --- Persistence across reload
   await page.reload({ waitUntil: 'networkidle' });
+  // Two exchanges by now: the chip-clicked question plus the follow-up click.
   check('conversation restored from localStorage after reload',
-    (await page.locator('.msg-row').count()) === 2, await page.locator('.msg-row').count());
-  check('sources restored too', (await page.locator('.source-chip').count()) === 2);
+    (await page.locator('.msg-row').count()) === 4, await page.locator('.msg-row').count());
+  check('sources restored for both answers',
+    (await page.locator('.source-chip').count()) === 4, await page.locator('.source-chip').count());
+  check('follow-ups restored, and only under the last answer',
+    (await page.locator('.followups').count()) === 1, await page.locator('.followups').count());
+  check('restored follow-ups are the model\'s, not the fallback',
+    (await page.locator('.followup-chip').first().innerText()).includes('horticulture grant'),
+    await page.locator('.followup-chip').first().innerText());
   check('region restored into the form', (await page.locator('#fRegion').inputValue()) === 'Poltava oblast');
 
   // --- Ukrainian toggle
@@ -219,7 +323,7 @@ function check(name, cond, detail) {
     (await page.getAttribute('html', 'lang')) === 'uk');
   await page.locator('#input').fill('Тест');
   await page.locator('#sendBtn').click();
-  await page.waitForFunction(() => document.querySelectorAll('.msg-row').length >= 4, null, { timeout: 10000 });
+  await waitForAnswers(3);
   check('language instruction switches to Ukrainian in system prompt',
     lastRequestBody.system.includes('Respond in Ukrainian'),
     lastRequestBody.system.slice(lastRequestBody.system.indexOf('Respond in'), lastRequestBody.system.indexOf('Respond in') + 60));
@@ -227,7 +331,7 @@ function check(name, cond, detail) {
   // --- XSS: user text must not be able to inject markup
   await page.locator('#input').fill('<img src=x onerror="window.__pwned=1">');
   await page.locator('#sendBtn').click();
-  await page.waitForFunction(() => document.querySelectorAll('.msg-row').length >= 6, null, { timeout: 10000 });
+  await waitForAnswers(4);
   check('user HTML is escaped, not executed',
     (await page.evaluate(() => window.__pwned)) === undefined);
 

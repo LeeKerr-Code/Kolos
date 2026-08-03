@@ -50,6 +50,12 @@ const path = require('node:path');
  * Twenty lines here removes a whole class of "why is my key not loading"
  * problems and one install step from the deploy guide. Real environment
  * variables always win, so this never overrides what systemd or the shell set.
+ *
+ * KOLOS_ENV_FILE overrides which file is read. Useful when config lives outside
+ * the app directory, and required by the test suite: tests must never write a
+ * .env into the app folder, because a leftover one silently overrides real
+ * configuration on the next start. That is not hypothetical — an interrupted
+ * test run left one behind and quietly turned on proxy trust.
  */
 function loadDotEnv(file) {
   let text;
@@ -76,7 +82,7 @@ function loadDotEnv(file) {
 }
 
 const ROOT = __dirname;
-loadDotEnv(path.join(ROOT, '.env'));
+loadDotEnv(process.env.KOLOS_ENV_FILE || path.join(ROOT, '.env'));
 
 /**
  * Detect a managed platform (Render, Railway, Fly, Vercel).

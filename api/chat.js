@@ -43,7 +43,11 @@ const RATE_LIMIT_WINDOW_MS = Number(process.env.KOLOS_RATE_LIMIT_WINDOW_MS) || 6
 // the bill: $10 per 1,000 searches, independent of which model is used. Left
 // uncapped, one question could fire eight or ten searches. Three keeps answers
 // well-sourced while roughly halving cost per question versus uncapped.
-const MAX_SEARCHES = Number(process.env.KOLOS_MAX_SEARCHES) || 3;
+const MAX_SEARCHES = Number(process.env.KOLOS_MAX_SEARCHES) || 5;
+
+// How many times we will resume a turn the API paused. See the pause_turn
+// handling below. Bounded so a pathological loop cannot run up a bill.
+const MAX_PAUSE_RESUMES = Number(process.env.KOLOS_MAX_PAUSE_RESUMES) || 3;
 
 // Whether to believe the X-Forwarded-For header when identifying a client for
 // rate limiting. This must default to OFF. If we trusted it unconditionally,
@@ -146,36 +150,93 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: { message: 'system prompt (string) is required.' } });
   }
 
-  try {
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: Math.min(Number(max_tokens) || 1200, 4096),
-        // Prompt caching. The system prompt now carries the full programme
-        // reference and runs to several thousand tokens, which would otherwise
-        // be billed at the full input rate on every single message. Marking it
-        // cacheable makes follow-up messages in a session ~90% cheaper on that
-        // portion. Well above the 1,024-token minimum for Sonnet, so it always
-        // qualifies. Default TTL is 5 minutes, refreshed on each hit.
-        //
-        // The whole system string is cached as one block, so changing language
-        // or farm profile mid-conversation writes a new cache entry. That costs
-        // one write and is rare in practice — most farmers set both once.
-        // Prompt caching is GA; no anthropic-beta header required.
-        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-        messages,
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: MAX_SEARCHES }],
-      }),
-    });
+  /**
+   * Resume any turn the API pauses.
+   *
+   * From Anthropic's web search docs: "The API can pause a long-running search
+   * turn and return stop_reason: 'pause_turn'. To continue, send the paused
+   * assistant message back unchanged in a new request."
+   *
+   * Without this, a paused turn arrives looking like a finished answer. In
+   * practice that meant a farmer being shown "let me verify the current numbers
+   * before I lay them out" with 23 sources attached and nothing else — a
+   * promise with the answer missing, presented as complete. For a tool people
+   * make money decisions on, a confidently truncated answer is worse than an
+   * error, because nothing signals that anything is wrong.
+   *
+   * Content blocks are accumulated across every leg of the turn, so the sources
+   * gathered before the pause survive into the final response alongside the
+   * answer written after it.
+   */
+  const runTurn = async (apiKeyIn, systemIn, messagesIn, maxTokensIn) => {
+    let convo = messagesIn;
+    const merged = [];
+    let data = null;
+    let status = 0;
+    let resumes = 0;
 
-    const data = await upstream.json();
-    return res.status(upstream.status).json(data);
+    while (true) {
+      const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKeyIn,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: maxTokensIn,
+          // Prompt caching. The system prompt carries the full programme
+          // reference and runs to several thousand tokens, which would
+          // otherwise be billed at the full input rate on every message.
+          // Marking it cacheable makes follow-ups in a session ~90% cheaper on
+          // that portion, and it is well above the 1,024-token minimum for
+          // Sonnet so it always qualifies. Default TTL is 5 minutes, refreshed
+          // on each hit. It matters more now: a paused turn is resumed with the
+          // same system prompt, so each resume is a cache hit rather than a
+          // full re-charge. Prompt caching is GA; no beta header needed.
+          system: [{ type: 'text', text: systemIn, cache_control: { type: 'ephemeral' } }],
+          messages: convo,
+          tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: MAX_SEARCHES }],
+        }),
+      });
+
+      status = upstream.status;
+      data = await upstream.json();
+
+      // Anything that isn't a well-formed success is passed straight back.
+      if (status !== 200 || !Array.isArray(data.content)) break;
+
+      merged.push(...data.content);
+
+      if (data.stop_reason !== 'pause_turn' || resumes >= MAX_PAUSE_RESUMES) break;
+
+      // "send the paused assistant message back unchanged"
+      convo = convo.concat([{ role: 'assistant', content: data.content }]);
+      resumes += 1;
+    }
+
+    return { status, data, merged, resumes };
+  };
+
+  try {
+    const { status, data, merged, resumes } = await runTurn(
+      apiKey,
+      system,
+      messages,
+      Math.min(Number(max_tokens) || 2000, 8192),
+    );
+
+    if (status === 200 && merged.length) {
+      if (resumes > 0) {
+        console.log(`Resumed a paused turn ${resumes} time(s); final stop_reason=${data.stop_reason}`);
+      }
+      // Rebuild the response with every leg's content, so the client sees one
+      // answer with all of its sources rather than only the last fragment.
+      return res.status(200).json({ ...data, content: merged, kolos_resumes: resumes });
+    }
+
+    return res.status(status).json(data);
   } catch (err) {
     console.error('Upstream request to Anthropic failed:', err);
     return res.status(502).json({ error: { message: 'Could not reach the Anthropic API: ' + err.message } });

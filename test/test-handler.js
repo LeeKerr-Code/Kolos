@@ -175,9 +175,10 @@ async function run() {
       sentBody.system[0].text === 'sys', sentBody && sentBody.system[0].text);
     check('web_search tool attached', Array.isArray(sentBody.tools) &&
       sentBody.tools[0].type === 'web_search_20250305', sentBody && sentBody.tools);
-    check('web search capped at 3 uses per question (cost control)',
-      sentBody.tools[0].max_uses === 3, sentBody && sentBody.tools[0]);
-    check('max_tokens capped at 4096', (() => sentBody.max_tokens === 1200)(), sentBody && sentBody.max_tokens);
+    check('web search capped per question (cost control)',
+      sentBody.tools[0].max_uses === 5, sentBody && sentBody.tools[0]);
+    check('default max_tokens applied when client sends none',
+      sentBody.max_tokens === 2000, sentBody && sentBody.max_tokens);
   }
 
   // --- 7. KOLOS_MODEL override is respected
@@ -199,12 +200,135 @@ async function run() {
     check('KOLOS_MODEL override applied', sentBody.model === 'claude-haiku-4-5', sentBody && sentBody.model);
   }
 
+  // --- 7b. pause_turn: the bug that shipped to production.
+  //         The API pauses a long search turn and returns partial content.
+  //         Unhandled, that fragment renders as a finished answer.
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+
+    const sentBodies = [];
+    let call = 0;
+    global.fetch = async (url, opts) => {
+      sentBodies.push(JSON.parse(opts.body));
+      call += 1;
+      if (call === 1) {
+        return { status: 200, json: async () => ({
+          stop_reason: 'pause_turn',
+          content: [
+            { type: 'text', text: 'Let me verify the current numbers.' },
+            { type: 'web_search_tool_result', tool_use_id: 't1',
+              content: [{ type: 'web_search_result', url: 'https://a.example', title: 'A' }] },
+          ],
+        }) };
+      }
+      return { status: 200, json: async () => ({
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'Here is the actual answer.\n\n[[NEXT]] one || two' }],
+      }) };
+    };
+
+    const res = mockRes();
+    await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.201' } }), res);
+    global.fetch = realFetch;
+
+    check('paused turn is resumed rather than returned as-is', call === 2, { call });
+    check('final stop_reason is end_turn, not pause_turn',
+      res.body.stop_reason === 'end_turn', res.body && res.body.stop_reason);
+    check('resume count reported', res.body.kolos_resumes === 1, res.body && res.body.kolos_resumes);
+    check('content from BOTH legs is merged', res.body.content.length === 3,
+      res.body && res.body.content.map(b => b.type));
+    check('sources gathered before the pause survive',
+      res.body.content.some(b => b.type === 'web_search_tool_result'), res.body.content);
+    check('the real answer is present', res.body.content.some(
+      b => b.type === 'text' && b.text.includes('actual answer')), res.body.content);
+    check('paused assistant message sent back unchanged on resume',
+      sentBodies[1].messages.length === sentBodies[0].messages.length + 1 &&
+      sentBodies[1].messages[sentBodies[1].messages.length - 1].role === 'assistant',
+      sentBodies[1] && sentBodies[1].messages);
+  }
+
+  // --- 7c. A turn that never stops pausing must be bounded, not infinite.
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+    let calls = 0;
+    global.fetch = async () => {
+      calls += 1;
+      return { status: 200, json: async () => ({
+        stop_reason: 'pause_turn',
+        content: [{ type: 'text', text: 'chunk ' + calls }],
+      }) };
+    };
+    const res = mockRes();
+    await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.202' } }), res);
+    global.fetch = realFetch;
+    check('endless pausing is capped at 1 + MAX_PAUSE_RESUMES calls', calls === 4, { calls });
+    check('caller still gets what was gathered', res.body.content.length === 4, res.body.content.length);
+    check('stop_reason stays pause_turn so the UI can flag it as incomplete',
+      res.body.stop_reason === 'pause_turn', res.body && res.body.stop_reason);
+  }
+
+  // --- 7d. An upstream error mid-resume is passed through, not swallowed.
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+    let n = 0;
+    global.fetch = async () => {
+      n += 1;
+      if (n === 1) return { status: 200, json: async () => ({
+        stop_reason: 'pause_turn', content: [{ type: 'text', text: 'partial' }] }) };
+      return { status: 529, json: async () => ({ error: { message: 'overloaded' } }) };
+    };
+    const res = mockRes();
+    await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.203' } }), res);
+    global.fetch = realFetch;
+    check('error during resume surfaces the error status', res.statusCode === 529, res.statusCode);
+    check('error body is passed through', /overloaded/.test(res.body.error.message), res.body);
+  }
+
+  // --- 7e. Defaults raised for hand-holding answers
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+    let sent = null;
+    global.fetch = async (url, opts) => {
+      sent = JSON.parse(opts.body);
+      return { status: 200, json: async () => ({ stop_reason: 'end_turn', content: [] }) };
+    };
+    const res = mockRes();
+    await handler(mockReq({
+      headers: { 'x-forwarded-for': '192.0.2.204' },
+      body: { system: 'sys', messages: [{ role: 'user', content: 'hi' }] },
+    }), res);
+    global.fetch = realFetch;
+    check('default max_tokens raised to 2000', sent.max_tokens === 2000, sent && sent.max_tokens);
+    check('web search allowance raised to 5', sent.tools[0].max_uses === 5, sent && sent.tools[0]);
+  }
+
   // --- 8. healthz
   {
     const healthz = require(path.join(__dirname, '..', 'api', 'healthz.js'));
     const res = mockRes();
     healthz({ method: 'GET' }, res);
     check('healthz -> 200 {ok:true}', res.statusCode === 200 && res.body.ok === true, res.body);
+    check('healthz reports a build string', typeof res.body.build === 'string' && res.body.build.length > 0, res.body);
+
+    // The deployed build must be identifiable without guessing from the UI.
+    const fs2 = require('fs');
+    const html = fs2.readFileSync(path.join(__dirname, '..', 'Kolos_Funding_Advisor.html'), 'utf8');
+    const m = html.match(/const KOLOS_BUILD = '([^']+)'/);
+    check('HTML carries a build marker', !!m, m);
+    check('HTML build matches the healthz build', m && m[1] === res.body.build,
+      { html: m && m[1], healthz: res.body.build });
   }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

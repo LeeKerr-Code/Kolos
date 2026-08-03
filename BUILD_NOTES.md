@@ -2,7 +2,9 @@
 
 **Compiled:** 3 August 2026, from the files in the Kolos project folder.
 **Revised:** 3 August 2026 — reference brief embedded (§7), front-page chips
-reworked (§8), self-hosted server added (§9), deployed to Vercel Hobby (§10).
+reworked (§8), self-hosted server added (§9), Vercel Hobby target (§10), follow-up
+suggestions (§11), env-file defect found on-device (§12),
+pause_turn handling after the first production failure (§13).
 **Scope:** assemble the deployable file set, verify it, and record where
 `HANDOVER.md` and `README.md` no longer match what the files actually contain.
 
@@ -152,9 +154,9 @@ kolos/
 ├── server.js                    self-hosted server, zero dependencies
 ├── DEPLOY.md                    deploy guide: managed hosting or your own server
 ├── test/
-│   ├── test-handler.js          23 checks on the request handlers
-│   ├── test-server.js           58 checks: server.js live, plus deploy config
-│   └── test-frontend.js         51 checks driving the UI in headless Chromium
+│   ├── test-handler.js          40 checks on the request handlers
+│   ├── test-server.js           59 checks: server.js live, plus deploy config
+│   └── test-frontend.js         78 checks driving the UI in headless Chromium
 └── BUILD_NOTES.md               this file
 ```
 
@@ -606,3 +608,268 @@ over.
 
 Unchanged and still true: no real call to the Anthropic API has ever been made
 from this code.
+
+---
+
+## 11. Follow-up suggestions under each answer
+
+Kolos now ends every answer with two or three clickable next steps.
+
+### The design decision
+
+The obvious version of this feature is "suggested questions", which move a
+farmer sideways into more browsing. That is not where they are stuck. A farmer
+who has just been told three programmes exist is not short of topics; they are
+stuck on "does this apply to me, and what do I do now".
+
+So the suggestions move DOWN a funnel rather than across a menu:
+
+discovery → am I eligible → what documents do I need → where and when do I
+apply → what if I do not qualify
+
+The last stage is the one most tools skip and the one that decides whether a
+farmer leaves with something. The prompt requires that when an answer is
+essentially "you probably do not qualify", at least one suggestion must point
+at an alternative or at where local programmes are listed.
+
+Two behaviours were chosen explicitly and could reasonably have gone the other
+way. Kolos always answers in full before offering next steps, and never
+withholds an answer to ask a qualifying question first — the user is often on a
+phone with poor signal and wants the answer now. And a dead end must always
+carry an alternative.
+
+### How it works
+
+The model appends a final line, `[[NEXT]] one || two || three`, which the
+frontend strips before display. The marker never reaches the screen, the export
+file, or localStorage.
+
+Parsing is deliberately forgiving: the marker is removed wherever it appears and
+whatever its case, because a leaked `[[NEXT]]` in a farmer's answer looks worse
+than no suggestions at all. Suggestions are capped at three and 120 characters,
+and empty entries are dropped.
+
+When nothing parses, a fixed four-item funnel fallback is shown instead, in the
+current language. This matters more than it sounds: a chat interface that shows
+suggestions most of the time and nothing the rest of the time reads as broken,
+and models do drift on output format.
+
+Chips render only under the newest answer. Leaving a row under every historical
+message turns a long conversation into a wall of stale buttons and invites
+clicks on a next step that stopped being next four answers ago.
+
+### The figures prohibition extends to chip text
+
+Chip text sits outside the answer body, so without an explicit rule it would
+escape the §7 guard rails. The prompt forbids any amount, percentage, deadline
+or date in a suggestion. Naming a programme is fine. "Check if I qualify for the
+machinery compensation" is allowed; "Apply before 30 September" is not.
+
+### A real vulnerability fixed on the way
+
+`escapeHtml()` built a text node and read back `innerHTML`, which escapes `&`,
+`<` and `>` but **not** quotes, because quotes need no escaping in a text node.
+Several values were interpolated into HTML attributes, notably
+`title="${escapeHtml(s.title)}"` for source chips. A web-search result whose
+title contained a double quote could break out of that attribute. It now escapes
+both quote characters, and is tested against a hostile string.
+
+Follow-up chips separately avoid attributes altogether: the text is attached
+through a DOM property rather than serialised into an HTML string, so
+model-generated content never passes through markup at all. Belt and braces,
+because this is the one place where text from outside the repo reaches the DOM.
+
+### Cost
+
+The generation overhead is negligible, roughly 60 output tokens per answer. The
+real cost is that the feature works: suggestions that land will roughly double
+questions per session, at about 5.4¢ each. That is the point of it and also the
+price, and it will show up on the Anthropic bill rather than anywhere else.
+
+The system prompt grew from about 3,850 to about 4,250 tokens, still cached.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 23 checks
+node test/test-server.js      # 58 checks
+node test/test-frontend.js    # 70 checks
+```
+
+151 checks, all passing. The new ones cover: chips render from model output; the
+marker never appears in visible text; clicking a chip sends it as a question;
+only one chip row survives a second answer and it is under the newest; chips and
+their text survive a reload; an answer with no marker parses cleanly and falls
+back; the marker is stripped inline, case-insensitively, and after a blank line;
+suggestions are capped and empties dropped; and a hostile string containing
+quotes and a tag is neutralised by `escapeHtml`.
+
+
+---
+
+## 12. A defect found by running the tests on the target machine
+
+Worth recording because it argues for something: the suites were run on the
+user's own Mac, from the unpacked repo, not just in the build container. That is
+where this surfaced.
+
+**Symptom.** `test-server.js` reported one failure there and none here:
+`proxy trust is OFF unless explicitly enabled`. The server was reading
+`X-Forwarded-For` when nothing had asked it to.
+
+**Cause.** Not the server. The test itself. Its `.env` phase wrote a file
+containing `KOLOS_TRUST_PROXY=1` into the **app directory** and removed it in a
+`finally`. An earlier run had been killed partway through by an unrelated
+timeout, so the `finally` never ran and the file survived. `server.js` then did
+exactly what it should: loaded `.env` and turned proxy trust on.
+
+**Second, worse failure.** Re-running it there crashed on teardown with
+`EPERM: operation not permitted, unlink`. The folder was reached through a
+bridge that refuses deletes, so the cleanup could never succeed and the stale
+`.env` would be recreated on every single run.
+
+**Why this mattered more than a red test.** A leftover `.env` in the app folder
+silently overrides real configuration at next start, and the values in it were
+test values. On a real deployment that is a rate limiter quietly trusting a
+forgeable header, with nothing in the logs to suggest anything is wrong beyond
+one line most people would not read.
+
+**Fix.** `server.js` now honours `KOLOS_ENV_FILE`, and the test writes its env
+file to a temp directory and points at it. Nothing is ever written to the app
+directory, so neither a killed process nor an undeletable filesystem can leave
+anything behind. A new assertion checks the app folder still contains no `.env`
+after the phase, and cleanup is best-effort because it no longer matters if it
+fails.
+
+`KOLOS_ENV_FILE` is also genuinely useful outside tests, for deployments that
+keep configuration outside the application directory.
+
+**Verified two ways:** the suite passes, and killing it mid-run with `SIGKILL`
+leaves no `.env` behind.
+
+**The general lesson.** A container is not the target. This bug was invisible
+here and reproducible there, and the mechanism — an interrupted run plus a
+filesystem that refuses deletes — is not something inspection would have caught.
+Run the suite where the code will actually live.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 23 checks
+node test/test-server.js      # 59 checks
+node test/test-frontend.js    # 70 checks
+```
+
+152 checks, all passing.
+
+---
+
+## 13. `pause_turn` — the bug that reached production
+
+The first real deployment produced this, in front of the user:
+
+> "Frontline and de-occupied farmers in Ukraine do get meaningfully better
+> terms across several programmes — let me verify the current numbers and
+> status before I lay them out, since these rates change often."
+>
+> Sources (23)
+
+A promise, 23 real sources, and no answer. Presented as finished.
+
+### Cause
+
+From Anthropic's web search documentation, verbatim:
+
+> "The API can pause a long-running search turn and return
+> `stop_reason: "pause_turn"`. To continue, send the paused assistant message
+> back unchanged in a new request."
+
+`api/chat.js` returned whatever the first upstream call produced. When the API
+paused the turn mid-search, that partial content was handed to the browser,
+which rendered it as a complete answer. No `[[NEXT]]` line either, because the
+model never reached the end of its reply.
+
+Note what this was **not**: not `max_tokens`, and not the `max_uses: 3` search
+cap. Search results count as input tokens, not output, so they never competed
+with the answer for the `max_tokens` budget. Worth stating because both were
+plausible-looking suspects and fixing either would have changed nothing.
+
+### Fix
+
+`api/chat.js` now loops: while `stop_reason` is `pause_turn`, it appends the
+paused assistant message unchanged and calls again, accumulating content blocks
+from every leg. The client receives one response containing the sources
+gathered before the pause **and** the answer written after it. Bounded at
+`MAX_PAUSE_RESUMES` (default 3, so at most 4 upstream calls) so a pathological
+loop cannot run up a bill. Prompt caching means each resume re-sends the large
+system prompt as a cache hit rather than at full rate.
+
+### The deeper problem it exposed
+
+The response's `stop_reason` was being discarded entirely. Any stopped answer —
+paused, or cut off at `max_tokens` — looked identical to a finished one.
+
+For a tool people make money decisions on, an answer that stops mid-thought
+while *looking* complete is worse than an outright error, because nothing
+signals that anything is missing. A farmer reading "let me verify the numbers"
+has no way to know the numbers were never coming.
+
+The client now treats any `stop_reason` other than `end_turn` or
+`stop_sequence` as truncated and renders a visible warning inside the answer
+bubble. Five cases are tested, including that `end_turn` and a missing
+`stop_reason` do **not** trigger it.
+
+### Also changed
+
+**Preamble suppression.** Two prompt rules were added: never announce an
+intention to search, and never promise an answer not yet written. Even with
+paused turns resumed, that preamble would still have opened the final answer.
+Kolos now searches silently and leads with what the farmer can act on.
+
+**`max_uses` raised from 3 to 5** and **default `max_tokens` from 1200 to 2000**
+(cap 4096 → 8192). The brief asked for a tool that holds a farmer's hand through
+complex eligibility questions; three searches and a short budget were tuned for
+cost, not for that. Costs roughly 2¢ more per question at worst.
+
+**A build marker.** `/api/healthz` now returns `{ok: true, build: "..."}` and the
+same string is in the HTML and logged to the console on load. Working out which
+version was actually deployed cost real time here, because a missing feature and
+a broken one look identical from the page. A test asserts the two strings match
+so they cannot drift.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 40 checks
+node test/test-server.js      # 59 checks
+node test/test-frontend.js    # 78 checks
+```
+
+177 checks. New ones cover: a paused turn is resumed rather than returned;
+content from both legs is merged so pre-pause sources survive; the paused
+assistant message is sent back unchanged; endless pausing is capped at four
+calls; an upstream error mid-resume surfaces its real status instead of being
+swallowed; the raised defaults; the truncation flag across five `stop_reason`
+values; the warning renders; and the HTML and healthz build strings agree.
+
+### What this says about the process
+
+Every earlier bug was caught by a test before shipping. This one was not,
+because the stub always returned a finished turn. The suite tested the code's
+handling of the responses I had thought to imagine, and `pause_turn` was not one
+of them.
+
+Reading the API documentation for the failure modes of a tool, rather than only
+its happy path, would have caught it. That is now a cheap check to repeat
+whenever a new tool or capability is added.
+
+
+### A flaky-test bug found while fixing the above
+
+Three assertions in `test-frontend.js` waited on `document.querySelectorAll('.msg-row').length`. The typing indicator **is** a `.msg-row`, so those waits returned the moment the spinner appeared — before the request had even been sent — and then asserted against an answer that had not arrived. Selectors like `.msg-row.agent .bubble` matched the spinner's own empty bubble for the same reason.
+
+It failed roughly one run in four, with a different assertion each time, which is exactly the profile of a test nobody trusts and everybody eventually deletes.
+
+Replaced with a single `waitForAnswers(n)` helper that counts `.msg-row.agent:not(.typing)`, and every selector that could match the spinner now excludes it. Verified by running the suite eight times consecutively: 78 passed, 0 failed, every time.
+
+Worth stating plainly: this was a defect in the tests, not the product. But a suite that fails intermittently is worse than no suite, because it teaches you to ignore red.

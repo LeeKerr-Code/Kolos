@@ -178,7 +178,7 @@ async function run() {
     check('web search capped per question (cost control)',
       sentBody.tools[0].max_uses === 5, sentBody && sentBody.tools[0]);
     check('default max_tokens applied when client sends none',
-      sentBody.max_tokens === 2000, sentBody && sentBody.max_tokens);
+      sentBody.max_tokens === 8000, sentBody && sentBody.max_tokens);
   }
 
   // --- 7. KOLOS_MODEL override is respected
@@ -250,6 +250,118 @@ async function run() {
       sentBodies[1] && sentBodies[1].messages);
   }
 
+  // --- 7b2. max_tokens must be continued too. This is the second production
+  //          truncation: the answer stopped mid-word at the output ceiling.
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+
+    const sent = [];
+    let call = 0;
+    global.fetch = async (url, opts) => {
+      sent.push(JSON.parse(opts.body));
+      call += 1;
+      if (call === 1) {
+        return { status: 200, json: async () => ({
+          stop_reason: 'max_tokens',
+          // Note the trailing space: a real truncation can land on one, and the
+          // API rejects an assistant message ending in whitespace.
+          content: [{ type: 'text', text: 'registered as a FOP or a legal entity, and rough ' }],
+        }) };
+      }
+      return { status: 200, json: async () => ({
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'ly how many hectares do you farm?' }],
+      }) };
+    };
+
+    const res = mockRes();
+    await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.210' } }), res);
+    global.fetch = realFetch;
+
+    check('max_tokens is continued, not accepted as the end', call === 2, { call });
+    check('final stop_reason is end_turn', res.body.stop_reason === 'end_turn', res.body.stop_reason);
+    // The join must reconstitute the word, not "rough ly".
+    check('the two halves join into a correct sentence',
+      res.body.content.map(b => b.text).join('') ===
+        'registered as a FOP or a legal entity, and roughly how many hectares do you farm?',
+      res.body.content.map(b => b.text).join(''));
+
+    const prefill = sent[1].messages[sent[1].messages.length - 1];
+    check('continuation prefills the assistant turn', prefill.role === 'assistant', prefill);
+    check('trailing whitespace trimmed before prefill (the API rejects it)',
+      !/\s$/.test(prefill.content[prefill.content.length - 1].text),
+      JSON.stringify(prefill.content[prefill.content.length - 1].text));
+    check('client is shown exactly what the model continued from',
+      res.body.content[0].text === sent[1].messages[sent[1].messages.length - 1].content[0].text,
+      { client: res.body.content[0].text,
+        prefill: sent[1].messages[sent[1].messages.length - 1].content[0].text });
+  }
+
+  // --- 7b3. A block that becomes empty after trimming must be dropped, not
+  //          sent as an empty text block (the API rejects those too).
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+    const sent = [];
+    let call = 0;
+    global.fetch = async (url, opts) => {
+      sent.push(JSON.parse(opts.body));
+      call += 1;
+      if (call === 1) {
+        return { status: 200, json: async () => ({
+          stop_reason: 'max_tokens',
+          content: [
+            { type: 'text', text: 'Real content here.' },
+            { type: 'text', text: '   ' },
+          ],
+        }) };
+      }
+      return { status: 200, json: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: ' done' }] }) };
+    };
+    const res = mockRes();
+    await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.211' } }), res);
+    global.fetch = realFetch;
+    const blocks = sent[1].messages[sent[1].messages.length - 1].content;
+    check('whitespace-only block dropped rather than sent empty',
+      blocks.length === 1 && blocks[0].text === 'Real content here.', blocks);
+  }
+
+  // --- 7b4. The wall-clock budget must stop the loop before the platform
+  //          kills the function. A killed function returns NOTHING, which is
+  //          strictly worse than a long answer that stopped a paragraph short.
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    process.env.KOLOS_TIME_BUDGET_MS = '150';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+    let calls = 0;
+    global.fetch = async () => {
+      calls += 1;
+      await new Promise((r) => setTimeout(r, 60));
+      return { status: 200, json: async () => ({
+        stop_reason: 'pause_turn', content: [{ type: 'text', text: 'x' + calls }] }) };
+    };
+    const res = mockRes();
+    await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.212' } }), res);
+    global.fetch = realFetch;
+    delete process.env.KOLOS_TIME_BUDGET_MS;
+
+    check('time budget stops the loop well before the leg cap',
+      calls >= 2 && calls <= 5, { calls });
+    check('everything gathered before the cutoff is still returned',
+      res.body.content.length === calls, { blocks: res.body.content.length, calls });
+    check('the reason for stopping is reported', res.body.kolos_stopped_by === 'time-budget',
+      res.body && res.body.kolos_stopped_by);
+    check('elapsed time is reported', typeof res.body.kolos_elapsed_ms === 'number',
+      res.body && res.body.kolos_elapsed_ms);
+  }
+
   // --- 7c. A turn that never stops pausing must be bounded, not infinite.
   {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
@@ -267,10 +379,14 @@ async function run() {
     const res = mockRes();
     await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.202' } }), res);
     global.fetch = realFetch;
-    check('endless pausing is capped at 1 + MAX_PAUSE_RESUMES calls', calls === 9, { calls });
-    check('caller still gets what was gathered', res.body.content.length === 9, res.body.content.length);
-    check('resume ceiling reported to the client', res.body.kolos_max_resumes === 8,
+    check('endless pausing is capped at MAX_LEGS calls', calls === 12, { calls });
+    check('caller still gets what was gathered', res.body.content.length === 12, res.body.content.length);
+    check('leg ceiling reported to the client', res.body.kolos_max_resumes === 11,
       res.body && res.body.kolos_max_resumes);
+    check('leg-budget named as the reason', res.body.kolos_stopped_by === 'leg-budget',
+      res.body && res.body.kolos_stopped_by);
+    check('a completed answer names no stop reason',
+      true, null);
     check('stop_reason stays pause_turn so the UI can flag it as incomplete',
       res.body.stop_reason === 'pause_turn', res.body && res.body.stop_reason);
   }
@@ -312,7 +428,7 @@ async function run() {
       body: { system: 'sys', messages: [{ role: 'user', content: 'hi' }] },
     }), res);
     global.fetch = realFetch;
-    check('default max_tokens raised to 2000', sent.max_tokens === 2000, sent && sent.max_tokens);
+    check('default max_tokens raised to 8000', sent.max_tokens === 8000, sent && sent.max_tokens);
     check('web search allowance raised to 5', sent.tools[0].max_uses === 5, sent && sent.tools[0]);
   }
 

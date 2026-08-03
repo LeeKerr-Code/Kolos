@@ -276,12 +276,23 @@ async function run() {
     check('vercel.json rewrites / to the app HTML',
       vercelJson.rewrites[0].source === '/' &&
       vercelJson.rewrites[0].destination === '/Kolos_Funding_Advisor.html', vercelJson.rewrites);
+    const maxDuration = vercelJson.functions['api/chat.js'].maxDuration;
     check('chat function given more time than a web-searched answer needs',
-      vercelJson.functions['api/chat.js'].maxDuration >= 30,
-      vercelJson.functions['api/chat.js']);
-    check('maxDuration stays within the legacy Hobby ceiling of 60s',
-      vercelJson.functions['api/chat.js'].maxDuration <= 60,
-      vercelJson.functions['api/chat.js']);
+      maxDuration >= 30, maxDuration);
+    check('maxDuration within the Hobby fluid-compute ceiling of 300s',
+      maxDuration <= 300, maxDuration);
+
+    /* The invariant that actually matters. api/chat.js stops continuing an
+       answer when its own wall-clock budget runs out, so that budget MUST be
+       comfortably below the platform's timeout. If it is not, the platform
+       kills the function mid-answer and the farmer gets nothing at all, which
+       is strictly worse than a long answer that stopped a paragraph short.
+       These two numbers live in different files and must move together. */
+    const chatSrc = fsy.readFileSync(path.join(root, 'api', 'chat.js'), 'utf8');
+    const budgetMs = Number(chatSrc.match(/KOLOS_TIME_BUDGET_MS\) \|\| (\d+)/)[1]);
+    check('time budget is below the platform timeout, with headroom',
+      budgetMs < maxDuration * 1000 * 0.9,
+      { budgetSeconds: budgetMs / 1000, maxDuration });
     check('package.json declares no dependencies',
       !pkg.dependencies && !pkg.devDependencies, Object.keys(pkg));
     check('start script points at a file that exists',

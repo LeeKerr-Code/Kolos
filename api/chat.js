@@ -45,18 +45,34 @@ const RATE_LIMIT_WINDOW_MS = Number(process.env.KOLOS_RATE_LIMIT_WINDOW_MS) || 6
 // well-sourced while roughly halving cost per question versus uncapped.
 const MAX_SEARCHES = Number(process.env.KOLOS_MAX_SEARCHES) || 5;
 
-// How many times we will resume a turn the API paused. See the pause_turn
-// handling below. Bounded so a pathological loop cannot run up a bill.
+// Total upstream calls allowed for a single question, including continuations.
 //
-// Started at 3 and that was too low: a question that triggered 5 searches ran
-// out of resumes and delivered a heading with nothing under it. Each search can
-// cost a pause, so this needs headroom above MAX_SEARCHES, not parity with it.
+// A turn can stop early for two different reasons and both have to be resumed
+// or the farmer gets half an answer:
 //
-// Resumes are not free. Each one re-sends the conversation so far, including
-// the search results already returned, as input tokens. The system prompt is
-// cached; that accumulated content is not. Hence a ceiling rather than a loop
-// that runs until it finishes.
-const MAX_PAUSE_RESUMES = Number(process.env.KOLOS_MAX_PAUSE_RESUMES) || 8;
+//   pause_turn  — the API paused a long-running search turn.
+//   max_tokens  — the model hit the output ceiling mid-sentence.
+//
+// Both were seen in production, in that order, and each was initially mistaken
+// for the other. Hence one budget covering both rather than two separate caps
+// that can be individually too small.
+//
+// Bounded because continuations are not free: each re-sends the conversation
+// so far, including search results already returned, as input tokens. Only the
+// system prompt is cached.
+const MAX_LEGS = Number(process.env.KOLOS_MAX_LEGS) || 12;
+
+// Wall-clock budget for the whole question, in milliseconds.
+//
+// This MUST stay below the platform's function timeout (`maxDuration` in
+// vercel.json, currently 300s). Continuing an answer costs time, and a function
+// killed by the platform returns nothing at all — strictly worse than returning
+// a long answer that stopped one paragraph short. So we stop starting new legs
+// with time to spare and return everything gathered so far.
+const TIME_BUDGET_MS = Number(process.env.KOLOS_TIME_BUDGET_MS) || 240000;
+
+// Reasons a turn stopped that we can and should continue from.
+const RESUMABLE = new Set(['pause_turn', 'max_tokens']);
 
 // Whether to believe the X-Forwarded-For header when identifying a client for
 // rate limiting. This must default to OFF. If we trusted it unconditionally,
@@ -177,12 +193,38 @@ module.exports = async function handler(req, res) {
    * gathered before the pause survive into the final response alongside the
    * answer written after it.
    */
+  /**
+   * Prepare a stopped assistant turn to be sent back so the model continues it.
+   *
+   * For pause_turn the docs say to send it back unchanged, and we do.
+   *
+   * For max_tokens we are using assistant prefill: the model continues writing
+   * the message it was cut off in. The API rejects an assistant message whose
+   * final text ends in whitespace, and a truncation can easily land on a space,
+   * so the last text block is right-trimmed for the copy we send. The untrimmed
+   * original is what the client receives, so nothing is lost from the answer.
+   */
+  const prepareForContinuation = (content, stopReason) => {
+    if (stopReason !== 'max_tokens') return content;
+    const copy = content.map((b) => ({ ...b }));
+    for (let i = copy.length - 1; i >= 0; i -= 1) {
+      if (copy[i].type === 'text') {
+        copy[i].text = copy[i].text.replace(/\s+$/, '');
+        if (!copy[i].text) copy.splice(i, 1);
+        break;
+      }
+    }
+    return copy;
+  };
+
   const runTurn = async (apiKeyIn, systemIn, messagesIn, maxTokensIn) => {
+    const startedAt = Date.now();
     let convo = messagesIn;
     const merged = [];
     let data = null;
     let status = 0;
     let resumes = 0;
+    let stoppedBy = null;
 
     while (true) {
       const upstream = await fetch('https://api.anthropic.com/v1/messages', {
@@ -216,24 +258,43 @@ module.exports = async function handler(req, res) {
       // Anything that isn't a well-formed success is passed straight back.
       if (status !== 200 || !Array.isArray(data.content)) break;
 
-      merged.push(...data.content);
+      const wantsMore = RESUMABLE.has(data.stop_reason);
+      const legsLeft = resumes < MAX_LEGS - 1;
+      const timeLeft = Date.now() - startedAt < TIME_BUDGET_MS;
+      if (wantsMore && !legsLeft) stoppedBy = 'leg-budget';
+      else if (wantsMore && !timeLeft) stoppedBy = 'time-budget';
+      const willContinue = wantsMore && legsLeft && timeLeft;
 
-      if (data.stop_reason !== 'pause_turn' || resumes >= MAX_PAUSE_RESUMES) break;
+      /* The text the client is shown MUST be the exact text the model continued
+         from, or the join is wrong. Trimming "…and rough " to "…and rough" for
+         the prefill and then showing the untrimmed version puts a space inside
+         "roughly". Same object, both places. */
+      const prepared = willContinue
+        ? prepareForContinuation(data.content, data.stop_reason)
+        : data.content;
 
-      // "send the paused assistant message back unchanged"
-      convo = convo.concat([{ role: 'assistant', content: data.content }]);
+      merged.push(...prepared);
+
+      if (!willContinue) break;
+
+      convo = convo.concat([{ role: 'assistant', content: prepared }]);
       resumes += 1;
     }
 
-    return { status, data, merged, resumes };
+    return { status, data, merged, resumes, stoppedBy, elapsedMs: Date.now() - startedAt };
   };
 
   try {
-    const { status, data, merged, resumes } = await runTurn(
+    const { status, data, merged, resumes, stoppedBy, elapsedMs } = await runTurn(
       apiKey,
       system,
       messages,
-      Math.min(Number(max_tokens) || 2000, 8192),
+      // 8000, not 1200. Answers that hold a farmer's hand through eligibility,
+      // documents and where to apply run long, and a mid-sentence cut is the
+      // worst possible place to stop. Raising this costs nothing unless the
+      // tokens are actually generated — output is billed per token produced,
+      // not per token allowed.
+      Math.min(Number(max_tokens) || 8000, 8192),
     );
 
     if (status === 200 && merged.length) {
@@ -242,9 +303,9 @@ module.exports = async function handler(req, res) {
       // only appears in the interesting case is one you cannot baseline against.
       const searches = merged.filter((b) => b.type === 'server_tool_use').length;
       console.log(
-        `kolos stop_reason=${data.stop_reason} resumes=${resumes}/${MAX_PAUSE_RESUMES} ` +
-        `searches=${searches}/${MAX_SEARCHES} blocks=${merged.length}` +
-        (data.stop_reason === 'pause_turn' ? '  <-- RAN OUT OF RESUMES, answer is incomplete' : '')
+        `kolos stop_reason=${data.stop_reason} legs=${resumes + 1}/${MAX_LEGS} ` +
+        `searches=${searches}/${MAX_SEARCHES} blocks=${merged.length} ms=${elapsedMs}` +
+        (stoppedBy ? `  <-- INCOMPLETE, hit the ${stoppedBy}` : '')
       );
       // Rebuild the response with every leg's content, so the client sees one
       // answer with all of its sources rather than only the last fragment.
@@ -252,7 +313,9 @@ module.exports = async function handler(req, res) {
         ...data,
         content: merged,
         kolos_resumes: resumes,
-        kolos_max_resumes: MAX_PAUSE_RESUMES,
+        kolos_max_resumes: MAX_LEGS - 1,
+        kolos_stopped_by: stoppedBy,
+        kolos_elapsed_ms: elapsedMs,
       });
     }
 

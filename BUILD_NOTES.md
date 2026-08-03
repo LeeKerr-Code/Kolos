@@ -5,7 +5,8 @@
 reworked (§8), self-hosted server added (§9), Vercel Hobby target (§10), follow-up
 suggestions (§11), env-file defect found on-device (§12),
 pause_turn handling after the first production failure (§13),
-resume ceiling and self-diagnosis (§14).
+resume ceiling and self-diagnosis (§14),
+guaranteed complete answers (§15).
 **Scope:** assemble the deployable file set, verify it, and record where
 `HANDOVER.md` and `README.md` no longer match what the files actually contain.
 
@@ -155,9 +156,9 @@ kolos/
 ├── server.js                    self-hosted server, zero dependencies
 ├── DEPLOY.md                    deploy guide: managed hosting or your own server
 ├── test/
-│   ├── test-handler.js          41 checks on the request handlers
-│   ├── test-server.js           59 checks: server.js live, plus deploy config
-│   └── test-frontend.js         84 checks driving the UI in headless Chromium
+│   ├── test-handler.js          54 checks on the request handlers
+│   ├── test-server.js           60 checks: server.js live, plus deploy config
+│   └── test-frontend.js         82 checks driving the UI in headless Chromium
 └── BUILD_NOTES.md               this file
 ```
 
@@ -947,3 +948,98 @@ the earlier flakiness is gone.
 
 Build `2026-08-03.5`. Check `/api/healthz` to confirm what is actually live
 before drawing conclusions from the page.
+
+---
+
+## 15. Guaranteeing the whole answer
+
+Third production screenshot, and a genuinely different failure from the second:
+
+> "Do you know if your farm is registered as a FOP or a legal entity, and rough"
+
+Cut mid-word. That is `max_tokens`, not `pause_turn`. So §14's resume fix worked
+— the answer was now long, well-sourced and good — and it then ran into the
+2000-token output ceiling set in the same build.
+
+Three truncations, three different causes, each initially mistaken for the last.
+Worth stating because the lesson is not "fix pause_turn" or "raise max_tokens",
+it is that a turn can stop early for several unrelated reasons and the code has
+to treat *stopping early* as the condition, not any one cause of it.
+
+### What changed
+
+**One budget for all stop reasons.** `RESUMABLE` is now a set containing both
+`pause_turn` and `max_tokens`, and one `MAX_LEGS` budget (12) covers every
+continuation. Adding a third reason later is a one-line change rather than a
+new special case.
+
+**`max_tokens` is continued by assistant prefill.** The partial assistant turn
+is sent back and the model carries on writing the same message.
+
+**Default `max_tokens` 2000 → 8000.** Raising it costs nothing unless the tokens
+are generated; output is billed per token produced, not per token allowed. At
+8000 (~6000 words) a single leg should never truncate a farmer's answer.
+
+**A wall-clock budget, which matters more than it sounds.** Continuations cost
+time, `maxDuration` was 60s, and a function killed by the platform returns
+*nothing at all* — strictly worse than a long answer one paragraph short. So:
+`maxDuration` raised to 300 (the Hobby ceiling under fluid compute) and a
+240-second budget in `api/chat.js` that stops starting new legs with headroom.
+A test asserts the budget stays comfortably below the platform timeout, because
+those two numbers live in different files and must move together.
+
+> If a deploy ever fails complaining about `maxDuration`, the project is on the
+> pre-April-2025 non-fluid regime where the Hobby ceiling is 60s. Set
+> `maxDuration` back to 60 and `KOLOS_TIME_BUDGET_MS` to 45000.
+
+### The "Finish that answer" button is gone
+
+It was added in §14 and removed here at the user's instruction, correctly.
+Completing an answer is the server's job. A button asking the farmer to repair a
+half-written answer is a failure wearing a feature's clothes, and on a tool
+people make money decisions on it also invites acting on the half they were
+given.
+
+The incomplete-answer warning stays, reworded to promise nothing and to ask for
+a report if it appears. It should now be unreachable in practice; if it fires,
+that is a bug worth hearing about, not a workflow.
+
+A test asserts no chip ever offers a finish or continue action in either
+language, and that the strings are gone from the UI entirely.
+
+### A bug the tests caught before it shipped
+
+Trimming trailing whitespace before prefill is necessary — the API rejects an
+assistant message ending in whitespace, and a truncation lands on a space often
+enough to matter. The first implementation trimmed the copy sent upstream but
+handed the *untrimmed* original to the browser.
+
+The model continues from what it was given. So "…and rough " trimmed to
+"…and rough", continued with "ly how many hectares…", and displayed from the
+untrimmed original, produced **"and rough ly how many hectares"** — a space
+inserted into the middle of a word, in every continued answer.
+
+Fixed by using one prepared copy for both purposes. A test now asserts the text
+shown to the client is byte-identical to the text the model continued from, and
+that the two halves join into the correct sentence.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 54 checks
+node test/test-server.js      # 60 checks
+node test/test-frontend.js    # 82 checks
+```
+
+196 checks. New ones cover: `max_tokens` is continued rather than accepted as
+the end; both halves join correctly; trailing whitespace is trimmed before
+prefill; a block that becomes empty after trimming is dropped rather than sent
+empty; the client sees exactly what the model continued from; the time budget
+stops the loop early and reports why; everything gathered before a cutoff is
+still returned; and no finish/continue action exists anywhere in the UI.
+
+Verified end to end with a simulated four-leg answer — pause, pause, max_tokens,
+end_turn — confirming sources from leg one survive, the split word rejoins, and
+the `[[NEXT]]` line arrives at the very end.
+
+Build `2026-08-03.7`.

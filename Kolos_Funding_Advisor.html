@@ -324,13 +324,6 @@
     transition:background 0.15s ease, transform 0.1s ease;
   }
   .followup-chip:hover{background:#DCEEEA;}
-  .followup-chip-primary{
-    background:var(--teal);
-    color:#fff;
-    border-color:var(--teal-dark);
-    font-weight:600;
-  }
-  .followup-chip-primary:hover{background:var(--teal-dark);}
   .followup-chip:active{transform:scale(0.98);}
   .followup-chip:focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
 
@@ -527,7 +520,7 @@ const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
 /* Must match BUILD in api/healthz.js. A test enforces it.
    Check which build is actually live by visiting /api/healthz. */
-const KOLOS_BUILD = '2026-08-03.5';
+const KOLOS_BUILD = '2026-08-03.7';
 console.log('Kolos build ' + KOLOS_BUILD);
 
 const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
@@ -696,9 +689,7 @@ const UI = {
     errUnexpected: "Kolos received an unexpected response. Please try again.",
     errNoAnswer: "Kolos could not find a clear answer that time. Try rephrasing your question.",
     exportEmpty: "There is no conversation to export yet.",
-    truncated: "This answer was cut off before Kolos finished writing it. Treat it as incomplete — use the button below to finish it.",
-    continueLabel: "Finish that answer",
-    continueQuestion: "Your previous answer stopped before you finished it. Continue it from exactly where it stopped, without repeating what you already wrote.",
+    truncated: "Kolos could not finish this answer within its time limit. Treat it as incomplete and ask again — this should not happen, so please report it if it does.",
     nextStepsLabel: "Next steps",
     followUpFallback: [
       "Am I eligible for this?",
@@ -745,9 +736,7 @@ const UI = {
     errUnexpected: "Kolos отримав неочікувану відповідь. Спробуйте ще раз.",
     errNoAnswer: "Цього разу Kolos не знайшов чіткої відповіді. Спробуйте переформулювати питання.",
     exportEmpty: "Поки що немає розмови для експорту.",
-    truncated: "Цю відповідь обірвано, Kolos не завершив її. Вважайте її неповною — натисніть кнопку нижче, щоб завершити.",
-    continueLabel: "Завершити відповідь",
-    continueQuestion: "Твоя попередня відповідь обірвалася, ти її не завершив. Продовж рівно з того місця, де вона зупинилася, не повторюючи вже написане.",
+    truncated: "Kolos не встиг завершити цю відповідь у межах ліміту часу. Вважайте її неповною і запитайте ще раз — такого не має ставатися, тож повідомте про це.",
     nextStepsLabel: "Наступні кроки",
     followUpFallback: [
       "Чи маю я право на це?",
@@ -897,19 +886,17 @@ function clearFollowUps(){
   threadEl.querySelectorAll('.followups').forEach(el => el.remove());
 }
 
-function renderFollowUps(row, followUps, truncated){
+function renderFollowUps(row, followUps){
   /* Entries are plain strings (the chip text is also the question) or
-     {label, q} when the two need to differ. */
-  let list = (followUps && followUps.length) ? followUps : UI[lang].followUpFallback;
+     {label, q} when the two need to differ.
 
-  /* A cut-off answer needs a way out, not just a warning. Telling a farmer
-     their answer is incomplete and leaving them to work out what to type is
-     half a feature. This puts the recovery first, one click away. */
-  if (truncated) {
-    list = [{ label: UI[lang].continueLabel, q: UI[lang].continueQuestion }]
-      .concat(list).slice(0, 4);
-  }
-
+     There is deliberately NO "finish that answer" action. Completing an answer
+     is the server's job, not something to delegate to the farmer: api/chat.js
+     continues a stopped turn until it ends properly, bounded only by a leg
+     budget and a wall-clock budget that exists so the platform cannot kill the
+     function and return nothing. A button asking the user to fix an incomplete
+     answer is an admission of failure dressed up as a feature. */
+  const list = (followUps && followUps.length) ? followUps : UI[lang].followUpFallback;
   if (!list.length) return;
 
   const wrap = document.createElement('div');
@@ -930,7 +917,7 @@ function renderFollowUps(row, followUps, truncated){
     const label = typeof entry === 'string' ? entry : entry.label;
     const question = typeof entry === 'string' ? entry : entry.q;
     const btn = document.createElement('button');
-    btn.className = 'followup-chip' + (typeof entry === 'string' ? '' : ' followup-chip-primary');
+    btn.className = 'followup-chip';
     btn.type = 'button';
     btn.textContent = label;
     btn.addEventListener('click', () => sendMessage(question));
@@ -987,7 +974,7 @@ function renderAgentMessage(text, sources, followUps, truncated){
     });
   }
   if (truncated) renderTruncationNote(row);
-  renderFollowUps(row, followUps, truncated);
+  renderFollowUps(row, followUps);
   scrollToBottom();
 }
 

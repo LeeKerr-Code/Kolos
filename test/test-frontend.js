@@ -275,42 +275,29 @@ function check(name, cond, detail) {
   check('truncation note says the answer is incomplete',
     /incomplete/i.test(noteShown.text), noteShown.text);
 
-  // --- A truncated answer must offer a way to finish it, not just a warning
-  const cont = await page.evaluate(() => {
+  // --- There must be NO manual "finish this answer" action.
+  //     Completing an answer is the server's job. A button asking the farmer to
+  //     repair a half-written answer is a failure wearing a feature's clothes.
+  const noFinish = await page.evaluate(() => {
     const row = document.querySelector('.msg-row.agent:not(.typing)');
     const existing = row.querySelector('.followups');
     if (existing) existing.remove();
-    renderFollowUps(row, ['normal one', 'normal two'], true);
+    renderFollowUps(row, ['normal one', 'normal two']);
     const chips = [...row.querySelectorAll('.followup-chip')];
     const out = {
       count: chips.length,
-      firstLabel: chips[0].textContent,
-      firstIsPrimary: chips[0].classList.contains('followup-chip-primary'),
-      othersPlain: chips.slice(1).every(c => !c.classList.contains('followup-chip-primary')),
+      labels: chips.map(c => c.textContent),
+      anyPrimary: chips.some(c => c.className.includes('primary')),
     };
     row.querySelector('.followups').remove();
     return out;
   });
-  check('truncated answer offers a finish button first',
-    /finish that answer/i.test(cont.firstLabel), cont);
-  check('finish button is visually primary', cont.firstIsPrimary === true, cont);
-  check('normal suggestions stay alongside it', cont.count === 3, cont);
-  check('only the finish button is styled primary', cont.othersPlain === true, cont);
-
-  const contQ = await page.evaluate(() => UI.en.continueQuestion);
-  check('finish button sends an instruction not to repeat itself',
-    /without repeating/i.test(contQ), contQ);
-
-  const notTrunc = await page.evaluate(() => {
-    const row = document.querySelector('.msg-row.agent:not(.typing)');
-    const existing = row.querySelector('.followups');
-    if (existing) existing.remove();
-    renderFollowUps(row, ['a', 'b'], false);
-    const n = row.querySelectorAll('.followup-chip-primary').length;
-    row.querySelector('.followups').remove();
-    return n;
-  });
-  check('a complete answer gets no finish button', notTrunc === 0, notTrunc);
+  check('no finish/continue action is ever offered',
+    !noFinish.labels.some(l => /finish|continue|завершити|продовж/i.test(l)), noFinish.labels);
+  check('no chip is styled as a primary repair action', noFinish.anyPrimary === false, noFinish);
+  check('normal suggestions render unchanged', noFinish.count === 2, noFinish);
+  check('the continue-question string is gone from the UI entirely',
+    await page.evaluate(() => Object.values(UI).every(t => !t.continueQuestion && !t.continueLabel)));
 
   // --- Build marker is visible for checking what is actually deployed
   const build = await page.evaluate(() => KOLOS_BUILD);

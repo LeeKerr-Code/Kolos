@@ -204,8 +204,7 @@ module.exports = async function handler(req, res) {
    * so the last text block is right-trimmed for the copy we send. The untrimmed
    * original is what the client receives, so nothing is lost from the answer.
    */
-  const prepareForContinuation = (content, stopReason) => {
-    if (stopReason !== 'max_tokens') return content;
+  const trimTrailingText = (content) => {
     const copy = content.map((b) => ({ ...b }));
     for (let i = copy.length - 1; i >= 0; i -= 1) {
       if (copy[i].type === 'text') {
@@ -215,6 +214,54 @@ module.exports = async function handler(req, res) {
       }
     }
     return copy;
+  };
+
+  /**
+   * Build the messages array that continues a stopped turn.
+   *
+   * There are two different situations and using the wrong one is fatal:
+   *
+   * 1. The turn ended on tool blocks (a paused search). Sending the assistant
+   *    message straight back is the documented resumption and works.
+   *
+   * 2. The turn ended on TEXT (a max_tokens cut). Sending that back is
+   *    assistant prefill, and claude-sonnet-5 refuses it outright:
+   *      "This model does not support assistant message prefill.
+   *       The conversation must end with a user message."
+   *    So the partial turn is followed by a user instruction to carry on. The
+   *    model writes a fresh message; the instruction is worded to make it join
+   *    cleanly rather than restart or announce itself.
+   *
+   * Chosen by inspecting the last block, not by stop_reason, because a paused
+   * turn can also end on text and would hit the same wall.
+   */
+  const CONTINUE_INSTRUCTION =
+    'Your previous message was cut off before you finished it. Continue it from ' +
+    'exactly where it stopped. Do not repeat any of it, do not restate the ' +
+    'question, do not acknowledge this instruction, and do not add any opening ' +
+    'phrase. Your very first character must carry straight on from the last ' +
+    'character you wrote, even if that is mid-word or mid-sentence.';
+
+  const buildContinuation = (convo, content) => {
+    const last = content[content.length - 1];
+    const endsOnToolBlock = !!last && (
+      last.type === 'server_tool_use' ||
+      last.type === 'tool_use' ||
+      last.type === 'web_search_tool_result'
+    );
+
+    if (endsOnToolBlock) {
+      return { convo: convo.concat([{ role: 'assistant', content }]), shown: content };
+    }
+
+    const trimmed = trimTrailingText(content);
+    return {
+      convo: convo.concat([
+        { role: 'assistant', content: trimmed },
+        { role: 'user', content: CONTINUE_INSTRUCTION },
+      ]),
+      shown: trimmed,
+    };
   };
 
   const runTurn = async (apiKeyIn, systemIn, messagesIn, maxTokensIn) => {
@@ -255,8 +302,20 @@ module.exports = async function handler(req, res) {
       status = upstream.status;
       data = await upstream.json();
 
-      // Anything that isn't a well-formed success is passed straight back.
-      if (status !== 200 || !Array.isArray(data.content)) break;
+      /* A failed leg must NEVER destroy an answer we already have.
+         This is the lesson from build .7: a continuation attempt was rejected,
+         the error was passed straight through, and a farmer who would have
+         received a long partial answer received nothing at all. A partial
+         answer clearly marked incomplete beats an error every time. */
+      if (status !== 200 || !Array.isArray(data.content)) {
+        if (merged.length) {
+          stoppedBy = 'upstream-error';
+          console.error('kolos continuation failed, returning the partial answer:',
+            JSON.stringify(data && data.error ? data.error : data).slice(0, 300));
+          break;
+        }
+        break; // Nothing gathered yet, so the error is all we have to report.
+      }
 
       const wantsMore = RESUMABLE.has(data.stop_reason);
       const legsLeft = resumes < MAX_LEGS - 1;
@@ -269,15 +328,14 @@ module.exports = async function handler(req, res) {
          from, or the join is wrong. Trimming "…and rough " to "…and rough" for
          the prefill and then showing the untrimmed version puts a space inside
          "roughly". Same object, both places. */
-      const prepared = willContinue
-        ? prepareForContinuation(data.content, data.stop_reason)
-        : data.content;
+      if (!willContinue) {
+        merged.push(...data.content);
+        break;
+      }
 
-      merged.push(...prepared);
-
-      if (!willContinue) break;
-
-      convo = convo.concat([{ role: 'assistant', content: prepared }]);
+      const next = buildContinuation(convo, data.content);
+      merged.push(...next.shown);
+      convo = next.convo;
       resumes += 1;
     }
 
@@ -297,7 +355,7 @@ module.exports = async function handler(req, res) {
       Math.min(Number(max_tokens) || 8000, 8192),
     );
 
-    if (status === 200 && merged.length) {
+    if (merged.length) {
       // Always logged, not only on resume. Working out why an answer stopped
       // is the single most useful thing these logs can tell you, and a log that
       // only appears in the interesting case is one you cannot baseline against.
@@ -314,6 +372,10 @@ module.exports = async function handler(req, res) {
         content: merged,
         kolos_resumes: resumes,
         kolos_max_resumes: MAX_LEGS - 1,
+        // Present only when the answer is NOT complete. The client keys its
+        // incomplete-answer warning off stop_reason, and a salvaged partial has
+        // whatever stop_reason its last good leg carried, so this is the
+        // authoritative signal that something was cut short.
         kolos_stopped_by: stoppedBy,
         kolos_elapsed_ms: elapsedMs,
       });

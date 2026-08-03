@@ -6,7 +6,8 @@ reworked (§8), self-hosted server added (§9), Vercel Hobby target (§10), foll
 suggestions (§11), env-file defect found on-device (§12),
 pause_turn handling after the first production failure (§13),
 resume ceiling and self-diagnosis (§14),
-guaranteed complete answers (§15).
+guaranteed complete answers (§15),
+prefill rejection and answer salvage (§16).
 **Scope:** assemble the deployable file set, verify it, and record where
 `HANDOVER.md` and `README.md` no longer match what the files actually contain.
 
@@ -156,9 +157,9 @@ kolos/
 ├── server.js                    self-hosted server, zero dependencies
 ├── DEPLOY.md                    deploy guide: managed hosting or your own server
 ├── test/
-│   ├── test-handler.js          54 checks on the request handlers
+│   ├── test-handler.js          59 checks on the request handlers
 │   ├── test-server.js           60 checks: server.js live, plus deploy config
-│   └── test-frontend.js         82 checks driving the UI in headless Chromium
+│   └── test-frontend.js         88 checks driving the UI in headless Chromium
 └── BUILD_NOTES.md               this file
 ```
 
@@ -1043,3 +1044,110 @@ end_turn — confirming sources from leg one survive, the split word rejoins, an
 the `[[NEXT]]` line arrives at the very end.
 
 Build `2026-08-03.7`.
+
+---
+
+## 16. Going backwards: when a fix made things worse
+
+Build `.7` produced this, with no answer at all:
+
+> Kolos ran into a problem: This model does not support assistant message
+> prefill. The conversation must end with a user message.
+
+That is worse than the truncation it replaced. A truncated answer is most of
+something; an error is nothing. Two separate defects, and the second one is the
+one that matters.
+
+### Defect 1: the continuation method was illegal for this model
+
+`.7` continued a `max_tokens` cut by sending the partial assistant message back
+so the model would carry on writing it. That is assistant prefill, and
+`claude-sonnet-5` rejects it outright, in those words.
+
+**Why `pause_turn` resumption worked and this did not**, which is the whole
+insight: a paused search turn ends on **tool blocks**, and sending it back is a
+documented tool continuation, not prefill. A `max_tokens` cut ends on **text**,
+and sending that back is prefill. Same-looking code, different legality.
+
+The Anthropic docs pages searched did not state the restriction, so the API's
+own error is being taken as ground truth here rather than a documented rule.
+
+**Fix.** The continuation shape is now chosen by inspecting the last content
+block, not by `stop_reason`:
+
+- Ends on a tool block → send the assistant message back unchanged. Proven path.
+- Ends on text → append the partial as an assistant message **followed by a user
+  instruction** to continue. The conversation ends with a user message, which is
+  what the model requires.
+
+Chosen by last block rather than by `stop_reason` deliberately: a *paused* turn
+can also end on text, and would have hit exactly the same wall. Verified end to
+end against a four-leg answer (pause on tools, pause on text, max_tokens,
+end_turn) confirming no call ever ends with a text-terminated assistant message.
+
+The continue instruction is explicit about joining cleanly: no repetition, no
+restating the question, no acknowledgement, no opening phrase, first character
+carries on even mid-word.
+
+### Defect 2: a failed continuation destroyed a good partial answer
+
+This is the more serious one, and it is a design failure rather than an API
+misunderstanding.
+
+The loop passed any non-200 straight back to the browser. So when leg two was
+rejected, leg one's work — a partly written answer with its sources — was
+discarded and the farmer got a red error box.
+
+**A partial answer clearly marked incomplete beats an error, every time.** The
+loop now salvages: if a continuation fails and content has already been
+gathered, it returns that content with `kolos_stopped_by: "upstream-error"` and
+logs the real error server-side. An error on the *first* leg still surfaces
+normally, because there is genuinely nothing to salvage.
+
+This turns a whole class of future upstream failures — overload, rate limits,
+transient 5xx — from total losses into degraded answers.
+
+### Two smaller things fixed alongside
+
+**The incomplete flag no longer depends on `stop_reason` alone.** A salvaged
+partial carries whatever reason its last good leg had, which can be `end_turn`
+and look perfectly healthy. `kolos_stopped_by` is now the authoritative signal
+and the client checks both.
+
+**Multiple `[[NEXT]]` markers.** An answer assembled from several legs can carry
+more than one: the model writes suggestions, gets cut off, and writes them again
+when it continues. Every occurrence is now stripped and the **last** one wins,
+being the one at the true end of the finished answer. Previously the first won,
+which meant a continued answer could show suggestions written before it was
+finished.
+
+### What went wrong in the process
+
+Three builds in a row shipped a fix that either did not address the real cause
+or introduced a new failure. Two things would have prevented it:
+
+1. **The tests mirrored my assumptions.** The `.7` suite asserted that a
+   continuation prefills the assistant turn — it tested that the code did what I
+   intended, not that the API would accept it. A stub cannot tell you a real API
+   will reject the shape you are sending.
+2. **No fallback path.** Every continuation change was written as though it would
+   succeed. The salvage behaviour above should have existed from the first
+   version; it costs six lines and converts total failures into partial ones.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 59 checks
+node test/test-server.js      # 60 checks
+node test/test-frontend.js    # 88 checks
+```
+
+207 checks. New ones: a text-ending continuation never prefills and always ends
+with a user message; the partial rides as an assistant message before it; the
+continue instruction forbids restating; a tool-ending turn still goes back
+unchanged; a failed continuation returns the partial with `upstream-error`
+rather than an error; a first-leg error still surfaces; a salvaged partial is
+flagged incomplete even when `stop_reason` looks clean; and every `[[NEXT]]`
+marker is stripped with the last one winning.
+
+Build `2026-08-03.8`.

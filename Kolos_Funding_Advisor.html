@@ -520,7 +520,7 @@ const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
 /* Must match BUILD in api/healthz.js. A test enforces it.
    Check which build is actually live by visiting /api/healthz. */
-const KOLOS_BUILD = '2026-08-03.7';
+const KOLOS_BUILD = '2026-08-03.8';
 console.log('Kolos build ' + KOLOS_BUILD);
 
 const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
@@ -995,13 +995,17 @@ function renderError(msg){
    farmer's answer looks worse than showing no suggestions at all. If nothing
    parses, callers fall back to the fixed funnel chips — a chat that shows
    suggestions most of the time and nothing the rest reads as broken. */
-const FOLLOWUP_MARKER = /\n*\[\[NEXT\]\][^\n]*/i;
+const FOLLOWUP_MARKER = /\n*\[\[NEXT\]\][^\n]*/gi;
 
 function extractFollowUps(text){
-  const match = text.match(FOLLOWUP_MARKER);
-  if (!match) return { text: text.trim(), followUps: [] };
+  /* An answer assembled from several legs can carry more than one marker: the
+     model may write one, get cut off, and write another when it continues.
+     Strip every occurrence, and keep the LAST, which is the one that sits at
+     the true end of the finished answer. */
+  const matches = text.match(FOLLOWUP_MARKER);
+  if (!matches || !matches.length) return { text: text.trim(), followUps: [] };
 
-  const followUps = match[0]
+  const followUps = matches[matches.length - 1]
     .replace(/\n*\[\[NEXT\]\]/i, '')
     .split('||')
     .map(s => s.trim())
@@ -1109,17 +1113,20 @@ async function sendMessage(text){
 
     const { text: replyText, sources, followUps } = extractResponse(data.content);
 
-    // end_turn and stop_sequence mean Claude finished. Anything else means it
-    // was stopped: max_tokens, or a pause the server ran out of resumes for.
-    const truncated = !!data.stop_reason &&
-      data.stop_reason !== 'end_turn' && data.stop_reason !== 'stop_sequence';
+    /* kolos_stopped_by is the authoritative signal: the server sets it only
+       when it gave up continuing an answer. stop_reason alone is not enough,
+       because a salvaged partial carries whatever reason its last good leg
+       had. Both are checked so neither can mask an incomplete answer. */
+    const truncated = !!data.kolos_stopped_by || (!!data.stop_reason &&
+      data.stop_reason !== 'end_turn' && data.stop_reason !== 'stop_sequence');
 
     /* One line in the console per answer. When something stops early, this says
        why without needing server log access — which matters because Vercel's
        free plan keeps runtime logs for only an hour. */
     console.log('Kolos answer: stop_reason=' + data.stop_reason +
-      ' resumes=' + data.kolos_resumes + '/' + data.kolos_max_resumes +
-      ' blocks=' + data.content.length + (truncated ? '  INCOMPLETE' : ''));
+      ' legs=' + ((data.kolos_resumes || 0) + 1) + '/' + ((data.kolos_max_resumes || 0) + 1) +
+      ' blocks=' + data.content.length + ' ms=' + data.kolos_elapsed_ms +
+      (truncated ? '  INCOMPLETE (' + data.kolos_stopped_by + ')' : ''));
 
     if (!replyText) {
       renderError(UI[lang].errNoAnswer);

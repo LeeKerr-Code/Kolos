@@ -226,6 +226,35 @@ function check(name, cond, detail) {
   check('no follow-ups parsed when the marker is absent', fb.count === 0, fb);
   check('a fixed funnel fallback exists so chips are never empty', fb.fallback >= 3, fb);
 
+  // --- A multi-leg answer can carry more than one [[NEXT]] marker
+  const multi = await page.evaluate(() => {
+    const r = extractFollowUps(
+      'Part one.\n\n[[NEXT]] early one || early two\nPart two continues.\n\n[[NEXT]] final one || final two');
+    return { text: r.text, ups: r.followUps };
+  });
+  check('every follow-up marker is stripped from the visible answer',
+    !multi.text.includes('[[NEXT]]') && !multi.text.includes('||'), multi.text);
+  check('the LAST marker wins, not the first',
+    multi.ups[0] === 'final one' && multi.ups[1] === 'final two', multi.ups);
+  check('answer text either side of a stripped marker survives',
+    multi.text.includes('Part one.') && multi.text.includes('Part two continues.'), multi.text);
+
+  // --- An incomplete answer is flagged from kolos_stopped_by, not just stop_reason
+  const flagged = await page.evaluate(() => {
+    const f = (d) => !!d.kolos_stopped_by || (!!d.stop_reason &&
+      d.stop_reason !== 'end_turn' && d.stop_reason !== 'stop_sequence');
+    return {
+      salvaged: f({ stop_reason: 'end_turn', kolos_stopped_by: 'upstream-error' }),
+      clean: f({ stop_reason: 'end_turn' }),
+      paused: f({ stop_reason: 'pause_turn' }),
+    };
+  });
+  check('a salvaged partial is flagged even when stop_reason looks clean',
+    flagged.salvaged === true, flagged);
+  check('a genuinely complete answer is not flagged', flagged.clean === false, flagged);
+  check('a stopped answer is still flagged without the server field',
+    flagged.paused === true, flagged);
+
   // --- Marker stripping is forgiving about placement and case
   const strip = await page.evaluate(() => [
     extractFollowUps('Answer.\n\n[[NEXT]] one || two').text,

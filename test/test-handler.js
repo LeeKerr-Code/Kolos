@@ -244,7 +244,9 @@ async function run() {
       res.body.content.some(b => b.type === 'web_search_tool_result'), res.body.content);
     check('the real answer is present', res.body.content.some(
       b => b.type === 'text' && b.text.includes('actual answer')), res.body.content);
-    check('paused assistant message sent back unchanged on resume',
+    // This turn ends on a tool-result block, so it is a genuine tool
+    // continuation rather than prefill, and goes back as-is.
+    check('turn ending on tool blocks is sent back as an assistant message',
       sentBodies[1].messages.length === sentBodies[0].messages.length + 1 &&
       sentBodies[1].messages[sentBodies[1].messages.length - 1].role === 'assistant',
       sentBodies[1] && sentBodies[1].messages);
@@ -289,15 +291,23 @@ async function run() {
         'registered as a FOP or a legal entity, and roughly how many hectares do you farm?',
       res.body.content.map(b => b.text).join(''));
 
-    const prefill = sent[1].messages[sent[1].messages.length - 1];
-    check('continuation prefills the assistant turn', prefill.role === 'assistant', prefill);
-    check('trailing whitespace trimmed before prefill (the API rejects it)',
-      !/\s$/.test(prefill.content[prefill.content.length - 1].text),
-      JSON.stringify(prefill.content[prefill.content.length - 1].text));
+    const msgs = sent[1].messages;
+    const last = msgs[msgs.length - 1];
+    const partial = msgs[msgs.length - 2];
+    // claude-sonnet-5 refuses assistant prefill: "This model does not support
+    // assistant message prefill. The conversation must end with a user message."
+    check('continuation does NOT prefill: last message is from the user',
+      last.role === 'user', { role: last.role });
+    check('the partial answer is carried as an assistant message before it',
+      partial.role === 'assistant', { role: partial.role });
+    check('continue instruction forbids restating or announcing',
+      /do not repeat|do not acknowledge/i.test(last.content), last.content);
+    check('trailing whitespace trimmed off the partial (the API rejects it)',
+      !/\s$/.test(partial.content[partial.content.length - 1].text),
+      JSON.stringify(partial.content[partial.content.length - 1].text));
     check('client is shown exactly what the model continued from',
-      res.body.content[0].text === sent[1].messages[sent[1].messages.length - 1].content[0].text,
-      { client: res.body.content[0].text,
-        prefill: sent[1].messages[sent[1].messages.length - 1].content[0].text });
+      res.body.content[0].text === partial.content[0].text,
+      { client: res.body.content[0].text, sent: partial.content[0].text });
   }
 
   // --- 7b3. A block that becomes empty after trimming must be dropped, not
@@ -326,7 +336,8 @@ async function run() {
     const res = mockRes();
     await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.211' } }), res);
     global.fetch = realFetch;
-    const blocks = sent[1].messages[sent[1].messages.length - 1].content;
+    const m = sent[1].messages;
+    const blocks = m[m.length - 2].content;
     check('whitespace-only block dropped rather than sent empty',
       blocks.length === 1 && blocks[0].text === 'Real content here.', blocks);
   }
@@ -407,8 +418,29 @@ async function run() {
     const res = mockRes();
     await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.203' } }), res);
     global.fetch = realFetch;
-    check('error during resume surfaces the error status', res.statusCode === 529, res.statusCode);
-    check('error body is passed through', /overloaded/.test(res.body.error.message), res.body);
+    // Build .7 passed this error straight through and the farmer saw nothing,
+    // having lost an answer that was already partly written. Never again.
+    check('a failed continuation returns the partial answer, not an error',
+      res.statusCode === 200, res.statusCode);
+    check('the partial content survives', res.body.content.length === 1 &&
+      res.body.content[0].text === 'partial', res.body.content);
+    check('the partial is flagged as incomplete',
+      res.body.kolos_stopped_by === 'upstream-error', res.body.kolos_stopped_by);
+  }
+
+  // --- 7d2. An error on the FIRST leg has nothing to salvage, so it must
+  //           still surface rather than being silently swallowed.
+  {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-fake-for-tests';
+    delete require.cache[require.resolve(HANDLER)];
+    const handler = require(HANDLER);
+    const realFetch = global.fetch;
+    global.fetch = async () => ({ status: 529, json: async () => ({ error: { message: 'overloaded' } }) });
+    const res = mockRes();
+    await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.213' } }), res);
+    global.fetch = realFetch;
+    check('first-leg error still surfaces (nothing to salvage)', res.statusCode === 529, res.statusCode);
+    check('first-leg error body passed through', /overloaded/.test(res.body.error.message), res.body);
   }
 
   // --- 7e. Defaults raised for hand-holding answers

@@ -275,6 +275,43 @@ function check(name, cond, detail) {
   check('truncation note says the answer is incomplete',
     /incomplete/i.test(noteShown.text), noteShown.text);
 
+  // --- A truncated answer must offer a way to finish it, not just a warning
+  const cont = await page.evaluate(() => {
+    const row = document.querySelector('.msg-row.agent:not(.typing)');
+    const existing = row.querySelector('.followups');
+    if (existing) existing.remove();
+    renderFollowUps(row, ['normal one', 'normal two'], true);
+    const chips = [...row.querySelectorAll('.followup-chip')];
+    const out = {
+      count: chips.length,
+      firstLabel: chips[0].textContent,
+      firstIsPrimary: chips[0].classList.contains('followup-chip-primary'),
+      othersPlain: chips.slice(1).every(c => !c.classList.contains('followup-chip-primary')),
+    };
+    row.querySelector('.followups').remove();
+    return out;
+  });
+  check('truncated answer offers a finish button first',
+    /finish that answer/i.test(cont.firstLabel), cont);
+  check('finish button is visually primary', cont.firstIsPrimary === true, cont);
+  check('normal suggestions stay alongside it', cont.count === 3, cont);
+  check('only the finish button is styled primary', cont.othersPlain === true, cont);
+
+  const contQ = await page.evaluate(() => UI.en.continueQuestion);
+  check('finish button sends an instruction not to repeat itself',
+    /without repeating/i.test(contQ), contQ);
+
+  const notTrunc = await page.evaluate(() => {
+    const row = document.querySelector('.msg-row.agent:not(.typing)');
+    const existing = row.querySelector('.followups');
+    if (existing) existing.remove();
+    renderFollowUps(row, ['a', 'b'], false);
+    const n = row.querySelectorAll('.followup-chip-primary').length;
+    row.querySelector('.followups').remove();
+    return n;
+  });
+  check('a complete answer gets no finish button', notTrunc === 0, notTrunc);
+
   // --- Build marker is visible for checking what is actually deployed
   const build = await page.evaluate(() => KOLOS_BUILD);
   check('build marker exposed in the page', /^\d{4}-\d{2}-\d{2}\.\d+$/.test(build), build);

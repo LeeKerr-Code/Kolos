@@ -4,7 +4,8 @@
 **Revised:** 3 August 2026 — reference brief embedded (§7), front-page chips
 reworked (§8), self-hosted server added (§9), Vercel Hobby target (§10), follow-up
 suggestions (§11), env-file defect found on-device (§12),
-pause_turn handling after the first production failure (§13).
+pause_turn handling after the first production failure (§13),
+resume ceiling and self-diagnosis (§14).
 **Scope:** assemble the deployable file set, verify it, and record where
 `HANDOVER.md` and `README.md` no longer match what the files actually contain.
 
@@ -154,9 +155,9 @@ kolos/
 ├── server.js                    self-hosted server, zero dependencies
 ├── DEPLOY.md                    deploy guide: managed hosting or your own server
 ├── test/
-│   ├── test-handler.js          40 checks on the request handlers
+│   ├── test-handler.js          41 checks on the request handlers
 │   ├── test-server.js           59 checks: server.js live, plus deploy config
-│   └── test-frontend.js         78 checks driving the UI in headless Chromium
+│   └── test-frontend.js         84 checks driving the UI in headless Chromium
 └── BUILD_NOTES.md               this file
 ```
 
@@ -873,3 +874,76 @@ It failed roughly one run in four, with a different assertion each time, which i
 Replaced with a single `waitForAnswers(n)` helper that counts `.msg-row.agent:not(.typing)`, and every selector that could match the spinner now excludes it. Verified by running the suite eight times consecutively: 78 passed, 0 failed, every time.
 
 Worth stating plainly: this was a defect in the tests, not the product. But a suite that fails intermittently is worse than no suite, because it teaches you to ignore red.
+
+---
+
+## 14. Still truncating — raising the ceiling, and making it diagnose itself
+
+Build `.4` fixed the mechanism but the answers still stopped early. Second
+production screenshot: a good opening paragraph, a bold heading introducing a
+list, and then nothing under it. The truncation warning fired correctly, which
+at least meant it was no longer being passed off as complete.
+
+### Diagnosis
+
+Almost certainly the resume ceiling, not `max_tokens`. `MAX_PAUSE_RESUMES` was
+3 while `MAX_SEARCHES` had just gone up to 5, and each search can cost a pause.
+Three resumes is not enough headroom for five searches, so the turn ran out of
+continuations partway through the answer. The stop point supports this: the text
+ends cleanly at the end of a heading rather than mid-word, which is what running
+out of legs looks like rather than running out of tokens.
+
+**This is stated as the likely cause, not a confirmed one.** Which is the point
+of the next change.
+
+### Made self-diagnosing
+
+Guessing twice was one time too many. Every answer now logs, server-side and in
+the browser console:
+
+```
+kolos stop_reason=pause_turn resumes=8/8 searches=5/5 blocks=14  <-- RAN OUT OF RESUMES
+```
+
+The browser line matters more than the server one on Vercel's free plan, where
+runtime logs are kept for an hour. Anyone seeing a short answer can now read
+why in the console instead of inferring it from prose.
+
+Logged unconditionally, not only on failure. A log that appears only in the
+interesting case gives you nothing to compare against.
+
+### Ceiling raised
+
+`MAX_PAUSE_RESUMES` 3 → 8, env-configurable via `KOLOS_MAX_PAUSE_RESUMES`.
+
+It stays bounded rather than looping to completion because resumes are not free:
+each one re-sends the conversation so far, including search results already
+returned, as input tokens. The system prompt is cached; that accumulated content
+is not. An unbounded retry loop on a pathological question is a bill, not a
+feature.
+
+### A way out, not just a warning
+
+Telling a farmer their answer is incomplete and leaving them to work out what to
+type is half a feature. A truncated answer now leads its suggestions with a
+**Finish that answer** button, styled as the primary action, which sends an
+instruction to continue from exactly where it stopped without repeating itself.
+The normal next-step suggestions stay alongside it.
+
+Tested: the button appears first and only when truncated, is the only chip
+styled primary, normal suggestions survive next to it, and a complete answer
+gets no button at all.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 41 checks
+node test/test-server.js      # 59 checks
+node test/test-frontend.js    # 84 checks
+```
+
+184 checks, all passing, frontend suite run three times consecutively to confirm
+the earlier flakiness is gone.
+
+Build `2026-08-03.5`. Check `/api/healthz` to confirm what is actually live
+before drawing conclusions from the page.

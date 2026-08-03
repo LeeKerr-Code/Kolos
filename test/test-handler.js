@@ -267,8 +267,10 @@ async function run() {
     const res = mockRes();
     await handler(mockReq({ headers: { 'x-forwarded-for': '192.0.2.202' } }), res);
     global.fetch = realFetch;
-    check('endless pausing is capped at 1 + MAX_PAUSE_RESUMES calls', calls === 4, { calls });
-    check('caller still gets what was gathered', res.body.content.length === 4, res.body.content.length);
+    check('endless pausing is capped at 1 + MAX_PAUSE_RESUMES calls', calls === 9, { calls });
+    check('caller still gets what was gathered', res.body.content.length === 9, res.body.content.length);
+    check('resume ceiling reported to the client', res.body.kolos_max_resumes === 8,
+      res.body && res.body.kolos_max_resumes);
     check('stop_reason stays pause_turn so the UI can flag it as incomplete',
       res.body.stop_reason === 'pause_turn', res.body && res.body.stop_reason);
   }

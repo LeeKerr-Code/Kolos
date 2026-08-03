@@ -47,7 +47,16 @@ const MAX_SEARCHES = Number(process.env.KOLOS_MAX_SEARCHES) || 5;
 
 // How many times we will resume a turn the API paused. See the pause_turn
 // handling below. Bounded so a pathological loop cannot run up a bill.
-const MAX_PAUSE_RESUMES = Number(process.env.KOLOS_MAX_PAUSE_RESUMES) || 3;
+//
+// Started at 3 and that was too low: a question that triggered 5 searches ran
+// out of resumes and delivered a heading with nothing under it. Each search can
+// cost a pause, so this needs headroom above MAX_SEARCHES, not parity with it.
+//
+// Resumes are not free. Each one re-sends the conversation so far, including
+// the search results already returned, as input tokens. The system prompt is
+// cached; that accumulated content is not. Hence a ceiling rather than a loop
+// that runs until it finishes.
+const MAX_PAUSE_RESUMES = Number(process.env.KOLOS_MAX_PAUSE_RESUMES) || 8;
 
 // Whether to believe the X-Forwarded-For header when identifying a client for
 // rate limiting. This must default to OFF. If we trusted it unconditionally,
@@ -228,12 +237,23 @@ module.exports = async function handler(req, res) {
     );
 
     if (status === 200 && merged.length) {
-      if (resumes > 0) {
-        console.log(`Resumed a paused turn ${resumes} time(s); final stop_reason=${data.stop_reason}`);
-      }
+      // Always logged, not only on resume. Working out why an answer stopped
+      // is the single most useful thing these logs can tell you, and a log that
+      // only appears in the interesting case is one you cannot baseline against.
+      const searches = merged.filter((b) => b.type === 'server_tool_use').length;
+      console.log(
+        `kolos stop_reason=${data.stop_reason} resumes=${resumes}/${MAX_PAUSE_RESUMES} ` +
+        `searches=${searches}/${MAX_SEARCHES} blocks=${merged.length}` +
+        (data.stop_reason === 'pause_turn' ? '  <-- RAN OUT OF RESUMES, answer is incomplete' : '')
+      );
       // Rebuild the response with every leg's content, so the client sees one
       // answer with all of its sources rather than only the last fragment.
-      return res.status(200).json({ ...data, content: merged, kolos_resumes: resumes });
+      return res.status(200).json({
+        ...data,
+        content: merged,
+        kolos_resumes: resumes,
+        kolos_max_resumes: MAX_PAUSE_RESUMES,
+      });
     }
 
     return res.status(status).json(data);

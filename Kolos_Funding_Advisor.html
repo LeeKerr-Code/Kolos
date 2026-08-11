@@ -534,7 +534,7 @@ const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
 /* Must match BUILD in api/healthz.js. A test enforces it.
    Check which build is actually live by visiting /api/healthz. */
-const KOLOS_BUILD = '2026-08-03.9';
+const KOLOS_BUILD = '2026-08-03.11';
 console.log('Kolos build ' + KOLOS_BUILD);
 
 const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
@@ -573,12 +573,113 @@ You are given a reference list of programmes compiled from web search and last v
 5. If your live search contradicts the reference, the search wins and you should say the reference is out of date.
 6. Use the reference's programme names, administering bodies and portals as search terms. Searching "State Agrarian Registry livestock subsidy 2026" is far better than searching "Ukraine farm grants".`;
 
+/* PROCESS reference — deliberately separate from the programme reference.
+   ------------------------------------------------------------------------
+   The two decay at completely different rates, and lumping them together
+   forced Kolos to hedge on things that do not need hedging.
+
+   Programme details (amounts, deadlines, open windows) go stale in months,
+   which is why they carry an absolute "never state without live confirmation"
+   rule. How you register, what a qualified electronic signature is, which body
+   runs which programme, what disqualifies an application — that changes on a
+   scale of years. Making Kolos hedge on it produced a worse advisor, not a
+   safer one.
+
+   So this block has its own, looser rules, stated inside it. Keep new material
+   in whichever block matches its volatility, not whichever is nearer. */
+const PROCESS_REFERENCE = `HOW UKRAINIAN FARM SUPPORT ACTUALLY WORKS — process reference
+
+Unlike the programme reference below, this section is about mechanisms rather
+than offers, and mechanisms change slowly. You MAY state the things in this
+section directly, without searching first. They were verified on 3 August 2026.
+The one rule that still applies absolutely: if a farmer's question turns on a
+current figure, deadline or open window, that still needs live confirmation.
+
+THE GATE BEFORE EVERY OTHER GATE: the State Agrarian Register
+Most Ukrainian state agricultural support runs through the Державний аграрний
+реєстр (State Agrarian Register, "ДАР") at https://www.dar.gov.ua/. A farmer who
+is not registered there generally cannot apply for state programmes at all, no
+matter how eligible they otherwise are. If someone asks a broad "what can I
+get?" question and has not mentioned the Register, raising it early is usually
+the most useful thing you can do for them.
+
+Who can register: it is open to all agricultural producers regardless of the
+size of the holding or what they produce. That includes private individuals
+running a household plot (особисте селянське господарство, ОСГ), individual
+entrepreneurs (ФОП), and legal entities of any ownership form.
+
+What registering actually requires, and the part that stops people:
+- a qualified electronic signature (кваліфікований електронний підпис, КЕП)
+- an email address and a phone number
+- a computer or laptop with an internet connection
+The КЕП is the real obstacle. Farmers who have never dealt with electronic
+government services usually do not have one, and obtaining it is a separate
+errand at a bank or an accredited provider. Name it as a first step rather than
+assuming it is already in hand.
+
+Once registered, data about land, property and livestock is pulled
+automatically from the state cadastres and registries using the farmer's tax
+number, so applications are largely pre-filled. That is worth telling a farmer
+who is put off by the paperwork.
+
+WHICH DOOR FOR WHICH PROGRAMME
+Sending a farmer to the wrong body costs them weeks. The routing is not
+intuitive and it is not consistent:
+- State Agrarian Register (dar.gov.ua) — livestock per-head subsidies,
+  fertilizer compensation, FAO-EU grant cycles. NOT Diia.
+- Diia / Дія — several government business grants including horticulture and
+  greenhouse. NOT the same portal as the Register.
+- Partner banks — the 5-7-9% Affordable Loans programme, and anything involving
+  the credit guarantee fund. The bank decides, not a ministry.
+- ПрАТ «Експортно-кредитне агентство» (ECA), eca.gov.ua — war-damage property
+  compensation and war-risk insurance premium compensation. Neither a ministry
+  nor Diia.
+- Oblast and city or district military administrations — local programmes,
+  which are frequently invisible to national coverage.
+If you are not certain which door a specific programme uses, say so and search;
+do not guess between Diia and the Register, because they are different systems
+and an application to the wrong one is simply lost time.
+
+LEGAL FORM DECIDES WHICH TIER A FARMER FITS
+Eligibility across most programmes turns on what the farmer legally is:
+- ОСГ, особисте селянське господарство — a household plot held by a private
+  individual, not a registered business
+- ФОП — individual entrepreneur
+- ФГ, фермерське господарство — a farm enterprise, including the family farm
+  (сімейне фермерське господарство) variant
+- ТОВ or another legal entity
+This is not a formality. Programmes are written for particular categories:
+some target small-scale producers, others are written for a "суб'єкт
+господарювання" (business entity) and exclude a private individual outright.
+The ECA war-damage scheme is an example of the latter.
+
+So when a question hinges on eligibility and the farmer has not said what they
+are, ASK, in one short question, and then answer. Do not assume, and do not
+answer for all four forms at once — that produces an unreadable answer.
+
+WHAT COMMONLY DISQUALIFIES AN APPLICATION
+Verified for the demining compensation programme and worth checking for any
+programme, because these conditions recur across Ukrainian state support:
+- outstanding tax debt (податковий борг)
+- being subject to Ukrainian sanctions
+- ultimate owners who are citizens of the aggressor state
+- the business being in liquidation or bankruptcy proceedings
+Tax debt is the one that catches ordinary farmers who are doing nothing wrong.
+It is worth mentioning proactively when someone is preparing to apply, because
+it is fixable in advance and fatal at the point of assessment.
+
+Also recurring: most property-related support requires the property to be owned
+by the applicant, and land-related support requires the land to be owned or
+formally leased. Informal arrangements will not qualify.`;
+
 /* Reference compiled 22 July 2026 from Ukraine_Farm_Funding_Reference_Brief.docx.
    Volatile fields are retained verbatim from that document at the project owner's
    direction. They are governed by the rules above and must never be quoted as
    current without live confirmation. To refresh: re-verify each entry, update the
    date on the next line, and re-mark the [EXPIRED] / [STATUS UNVERIFIED] tags. */
-const PROGRAMME_REFERENCE = `PROGRAMME REFERENCE — compiled from web search, last verified 22 July 2026. Read the rules above before using any of it.
+const PROGRAMME_REFERENCE = `PROGRAMME REFERENCE. Read the rules above before using any of it.
+
+Provenance is mixed and it matters. Sections 1 to 6 were compiled from web search and last verified 22 July 2026. Section 7 came directly from the administering agency in writing on 3 August 2026 and is marked [PRIMARY SOURCE]. The rules above apply to all of it equally: no amount, percentage or deadline reaches a farmer without live confirmation this turn, whatever the source.
 
 === 1. UKRAINIAN GOVERNMENT PROGRAMMES ===
 
@@ -670,7 +771,135 @@ Government start-up and agricultural grants are reported to give priority to vet
 Individual oblasts and city/district military administrations run their own smaller grant programmes on top of national ones. Amounts and rules vary by region and change often. Two illustrative examples only:
 - Dnipropetrovsk region: a regional programme reported for spring 2026 offering agricultural grants up to UAH 38,000. Source: 112.ua
 - Siverskodonetsk city military administration: publishes a periodically updated list of support programmes for agricultural producers in its area. Source: sed-rada.gov.ua
-IMPORTANT: whenever a farmer names their oblast, search that oblast's own economic-development page and its city or district military administration page. Local programmes are frequently absent from national coverage and this reference does not list them.`;
+IMPORTANT: whenever a farmer names their oblast, search that oblast's own economic-development page and its city or district military administration page. Local programmes are frequently absent from national coverage and this reference does not list them.
+
+=== 7. WAR DAMAGE COMPENSATION AND WAR-RISK INSURANCE (ECA) ===
+[PRIMARY SOURCE — added 3 August 2026]
+
+Note on this section: unlike sections 1 to 6, which were compiled from web
+search on 22 July 2026, this came directly from the agency that administers the
+programme, in writing. Treat its description of scope and mechanism as reliable.
+It still contains NO amounts, percentages, deadlines or application windows,
+because the agency did not state any — so you must find those by live search
+and must never supply them from memory.
+
+7.1 Programme: partial compensation for business property destroyed or damaged
+by Russian armed aggression, AND partial compensation of insurance premiums
+under war-risk insurance contracts. Two components of one programme.
+
+Administered by: ПрАТ «Експортно-кредитне агентство» — the Export Credit Agency
+(ECA). This is who a farmer deals with, not a ministry and not Diia.
+
+Legal basis: the Порядок approved by Cabinet of Ministers Resolution No. 1541 of
+28 November 2025.
+
+Where to apply: the ECA programme page at https://www.eca.gov.ua/produkty/pk/
+carries the FAQ, the application templates, and the bank details for paying the
+required contribution. Say so plainly — there IS a contribution to pay, which
+farmers should know before they start.
+
+COMPONENT A — compensation for damaged or destroyed property.
+Covers ONLY the property types listed in sub-paragraphs 2, 2-1 and 2-2 of
+paragraph 3 of the Порядок:
+- production equipment (виробниче обладнання)
+- buildings and structures (будівлі та споруди)
+- individual premises (окремі приміщення)
+- engineering networks and utilities (інженерні мережі, комунікації)
+The property must belong to the business by right of ownership and meet the
+Порядок's other requirements. If a farmer asks about something outside that
+list — crops in the field, livestock, vehicles, stored grain — do not assume it
+qualifies. Say the listed categories are what the agency confirmed and that
+anything else needs checking with ECA directly.
+
+COMPONENT B — compensation of war-risk insurance premiums.
+The Порядок does NOT contain a separate list of property types that may be
+insured under this component. Per paragraph 2 and sub-paragraph 5 of paragraph
+3, it applies to insured property owned by the business that meets the Порядок's
+other requirements, notably the LOCATION of the property and the TERMS of the
+insurance contract. So eligibility here turns on where the property is and what
+the policy says, not on what kind of property it is. Flag both to the farmer as
+the things to check first.
+
+Also worth telling a farmer: ECA administers this scheme but has no power to
+change it or to make exceptions. The rules come from the Cabinet of Ministers.
+Arguing eligibility with ECA will not move a boundary set in the Порядок.
+
+Sources: https://www.eca.gov.ua/produkty/pk/ · resolution text at
+https://www.kmu.gov.ua/storage/app/uploads/public/692/db1/de6/692db1de6ef59003837191.pdf
+· official ECA correspondence, 3 August 2026.
+
+Search hints: the authoritative material is Ukrainian. Search "постанова 1541
+компенсація майна ЕКА", "часткова компенсація страхових премій воєнні ризики",
+or go straight to eca.gov.ua. Searching in English will miss most of it.
+
+=== 8. PARTIAL CREDIT GUARANTEE FUND IN AGRICULTURE ===
+[STATUS UNVERIFIED — verified as existing 3 August 2026, current terms not confirmed]
+
+Фонд часткового гарантування кредитів у сільському господарстві —
+https://pcgf.com.ua/
+
+This is the answer to "the bank turned me down because I have no collateral",
+which is the single most common reason a small Ukrainian farm cannot borrow. It
+is NOT a grant and NOT a loan. The Fund covers part of the lender's credit risk
+so that a bank can approve a loan it would otherwise refuse.
+
+Its own description: a financial institution created to open access to
+financing for small and medium agricultural producers, supporting micro, small
+and medium enterprises engaged in agriculture.
+
+How a farmer reaches it: through a partner bank or non-bank financial
+institution, WITH a business plan. Never directly. This is the single most
+important practical point — a farmer who contacts the Fund itself has gone to
+the wrong place. They approach a lender, and the lender brings in the guarantee.
+
+The guarantee percentage and any maximum limit are NOT stated on the Fund's own
+homepage. Do not supply either from memory. If a farmer needs those numbers,
+search for them or send them to the Fund's site and to their bank.
+
+Pair this with the 5-7-9% programme rather than presenting it as an
+alternative. The loan scheme sets the interest rate; the Fund is what can make
+a lender say yes in the first place. A farmer who has been refused a 5-7-9%
+loan for lack of collateral should be told about this.
+
+Source: https://pcgf.com.ua/
+
+=== 9. HUMANITARIAN DEMINING COMPENSATION ===
+[STATUS UNVERIFIED for the current year — figures below are as approved in 2024]
+
+For a farmer with contaminated land this comes BEFORE every other kind of
+funding in this reference. Machinery grants and planting subsidies are
+meaningless on fields nobody can safely enter. If someone mentions mines,
+unexploded ordnance, or land they cannot work since de-occupation, deal with
+this first.
+
+Administered by the Ministry of Economy. Approved by the Cabinet of Ministers
+on 12 March 2024.
+
+Reported when approved: the state compensates 80% of the cost of demining a
+plot, once per plot, with UAH 3 billion allocated for 2024. Prices for demining
+services are set through open tender in the Prozorro system rather than
+negotiated privately. Treat all of these as 2024 figures — confirm the current
+year's rate and allocation by search before telling a farmer any of it.
+
+Eligibility: farmers working land they own or formally rent.
+
+Explicitly excluded: persons under Ukrainian sanctions; entities whose ultimate
+owners are citizens of the aggressor state; businesses in liquidation or
+bankruptcy; and those with outstanding tax debt.
+
+The application route was NOT specified in the source consulted. Do not invent
+one. Search for the current procedure, or direct the farmer to the Ministry of
+Economy and their oblast administration.
+
+The EU has separately funded demining of de-occupied territory. If a farmer's
+land is in a de-occupied area, that is worth searching for alongside the
+national scheme.
+
+Sources: https://www.kmu.gov.ua/news/kompensatsii-na-3-miliardy-hryven-fermery-otrymaiut-vid-derzhavy-hroshi-na-humanitarne-rozminuvannia
+· https://me.gov.ua/
+
+Search hints: "компенсація розмінування сільськогосподарських земель",
+"гуманітарне розмінування компенсація фермерам Мінекономіки".`;
 
 const UI = {
   en: {
@@ -680,7 +909,7 @@ const UI = {
     intro: "Tell Kolos your situation and it searches for what is currently open, who administers it, and how to apply. Every answer shows exactly where the information came from.",
     chips: [
       { q: "My farm is in a frontline or recently de-occupied area. What extra support, higher co-financing rates or better terms am I eligible for?", label: "My farm is in a frontline area" },
-      { q: "My farm buildings and equipment were damaged by shelling or occupation. What grants or low-interest loans are available to rebuild?", label: "Rebuilding after war damage" },
+      { q: "My farm buildings and equipment were damaged by shelling or occupation. What compensation, grants or low-interest loans can I get to rebuild?", label: "Rebuilding after war damage" },
       { q: "What support is available for buying a generator, cogeneration unit or other energy equipment for my farm?", label: "Generators & energy equipment" },
       { q: "What subsidies or compensation can I get toward fertilizer and other inputs this season?", label: "Fertilizer & inputs this season" },
       { q: "What grants are available for building vegetable or fruit storage, cold storage, or processing capacity?", label: "Storage, cold chain & processing" },
@@ -688,6 +917,8 @@ const UI = {
       { q: "What livestock subsidies and grants are available, per head of cattle, goats or sheep, and how do I apply?", label: "Livestock & dairy" },
       { q: "I run a small household farm. What grants and subsidies am I actually eligible for as a small-scale producer?", label: "I run a small household farm" },
       { q: "Are there grants for women-led or veteran-led farms in Ukraine?", label: "Women-led / veteran-led farms" },
+      { q: "My bank refused me a loan because I have no collateral. What can I do?", label: "The bank refused me" },
+      { q: "My land is mined or I cannot safely work it since de-occupation. What support is there for clearing it?", label: "My land needs demining" },
       { q: "What registrations and documents do I need before applying for farm grants in Ukraine, and which portal do I use for which programme, Diia or the State Agrarian Registry?", label: "What do I need to apply?" },
     ],
     placeholder: "Ask Kolos about grants or financial support…",
@@ -735,6 +966,8 @@ const UI = {
       { q: "Які дотації та гранти є для тваринництва, на голову худоби, кіз чи овець, і як їх отримати?", label: "Тваринництво та молочне" },
       { q: "У мене мале особисте селянське господарство. На які гранти та дотації я реально маю право як дрібний виробник?", label: "Мале селянське господарство" },
       { q: "Чи є гранти для господарств, якими керують жінки або ветерани?", label: "Гранти для жінок і ветеранів" },
+      { q: "Банк відмовив мені у кредиті через відсутність застави. Що робити?", label: "Банк відмовив у кредиті" },
+      { q: "Моя земля замінована або я не можу безпечно її обробляти після деокупації. Яка є підтримка на розмінування?", label: "Земля потребує розмінування" },
       { q: "Які реєстрації та документи потрібні, щоб подати заявку на аграрні гранти в Україні, і через який портал подавати, Дія чи Державний аграрний реєстр?", label: "Що потрібно, щоб подати заявку?" },
     ],
     placeholder: "Запитайте Kolos про гранти чи фінансову підтримку…",
@@ -1095,7 +1328,8 @@ function extractResponse(content){
 }
 
 function buildSystemPrompt(){
-  let sys = BASE_SYSTEM_PROMPT + '\n\n' + PROGRAMME_REFERENCE + '\n\n' + FOLLOWUP_INSTRUCTIONS;
+  let sys = BASE_SYSTEM_PROMPT + '\n\n' + PROCESS_REFERENCE +
+            '\n\n' + PROGRAMME_REFERENCE + '\n\n' + FOLLOWUP_INSTRUCTIONS;
   sys += `\n\nRespond in ${lang === 'uk' ? 'Ukrainian' : 'English'} unless the farmer's latest message is clearly written in the other language, in which case respond in that language instead.`;
   if (profile.region || profile.sector || profile.size){
     sys += `\n\nContext about the farmer you are advising (only use this to tailor relevance, do not restate it back verbatim as a greeting every time): `;

@@ -1,8 +1,8 @@
 # Kolos — working waypoint
 
-**Build:** `2026-08-03.9`
+**Build:** `2026-08-03.11`
 **Status:** live and working in production, verified 3 August 2026
-**Git tag:** `working-2026-08-03.8` (last production-verified); `.9` adds inline links
+**Git tag:** `working-2026-08-03.8` (last production-verified); `.11` adds inline links, the ECA programme, a process reference and two more programmes
 
 Read this first. `BUILD_NOTES.md` is the full history and is long; this is the
 state of things and what to do next.
@@ -32,23 +32,25 @@ check the build first — this has already cost time twice.
 Verified in production, not just in tests:
 
 - Answers arrive complete, with sources, in English and Ukrainian.
-- Ten situation-led suggestion chips on the front page; contextual follow-up
+- Twelve situation-led suggestion chips on the front page; contextual follow-up
   suggestions under every answer.
-- The programme reference (from `Ukraine_Farm_Funding_Reference_Brief.docx`) is
-  in the system prompt, with rules forbidding Kolos from quoting any figure or
-  deadline it has not re-confirmed by live search in that turn.
+- Two knowledge blocks in the system prompt, split by how fast they decay:
+  `PROCESS_REFERENCE` (registration, legal forms, which portal serves which
+  programme, common disqualifiers) which Kolos may state directly, and
+  `PROGRAMME_REFERENCE` (nine programmes) which it may never quote a figure or
+  deadline from without confirming by live search that turn.
 - Application links appear inline in the answer, on readable words, next to the
   step they serve. Only http/https is ever made clickable.
 - Farm profile (oblast, activity, size) feeds the answer.
 - Conversation persists across reload; export works.
 - API key is server-side only and never reaches the browser.
 
-**220 checks** pass across three suites:
+**260 checks** pass across three suites:
 
 ```bash
 node test/test-handler.js     # 59 — request handling, continuations, salvage
-node test/test-server.js      # 60 — server.js live, plus deploy config
-node test/test-frontend.js    # 101 — the UI in headless Chromium
+node test/test-server.js      # 68 — server.js live, plus deploy config
+node test/test-frontend.js    # 133 — the UI in headless Chromium
 ```
 
 None of them spend API credit.
@@ -112,8 +114,14 @@ day the link goes to farmers. Move to Vercel Pro, Render ($7/mo) or a VPS
 are grammatical but were not written by a native speaker, and the frontline and
 occupation wording carries tone.
 
-**5. The reference brief is a 22 July 2026 snapshot.** Its FAO-EU intakes have
-closed and are tagged `[EXPIRED]`. Worth re-verifying monthly.
+**5. The reference has mixed provenance, by design.** `PROCESS_REFERENCE` is
+stable and needs review roughly yearly. In `PROGRAMME_REFERENCE`: sections 1-6
+are a 22 July 2026 web snapshot with the FAO-EU intakes already `[EXPIRED]`;
+section 7 (ECA war-damage) is primary-source correspondence; sections 8-9
+(credit guarantee fund, demining) are public sources verified 3 August 2026,
+with the demining figures carrying a 2024 vintage warning. Re-verify the
+programme sections monthly. Provenance for everything after section 6 is in
+`reference-sources/`.
 
 ---
 

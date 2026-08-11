@@ -100,7 +100,7 @@ function check(name, cond, detail) {
   // --- Page loads and renders
   check('title renders', (await page.title()).includes('Kolos'));
   check('welcome heading present', await page.locator('#welcomeHeading').isVisible());
-  check('10 suggestion chips rendered', (await page.locator('.chip').count()) === 10,
+  check('12 suggestion chips rendered', (await page.locator('.chip').count()) === 12,
     await page.locator('.chip').count());
   check('no uncaught page errors on load', pageErrors.length === 0, pageErrors);
 
@@ -112,6 +112,12 @@ function check(name, cond, detail) {
   check('how-to-apply chip present', chipLabels.some(l => /need to apply/i.test(l)), chipLabels);
   check('EBRD/World Bank dead-end chip removed',
     !chipLabels.some(l => /EBRD|World Bank/i.test(l)), chipLabels);
+  check('no-collateral chip present', chipLabels.some(l => /bank refused/i.test(l)), chipLabels);
+  check('demining chip present', chipLabels.some(l => /demining/i.test(l)), chipLabels);
+  check('both new chips exist in Ukrainian too', await page.evaluate(() =>
+    UI.uk.chips.length === UI.en.chips.length &&
+    UI.uk.chips.some(c => /Банк відмовив/.test(c.label)) &&
+    UI.uk.chips.some(c => /розмінування/.test(c.label))));
 
   // --- escapeHtml does not escape double quotes, so no chip question may
   //     contain one or it breaks out of the data-q attribute.
@@ -201,6 +207,79 @@ function check(name, cond, detail) {
     sys.includes('CONTEXT ONLY, NOT FARMER-FACING'));
   check('livestock routed to the State Agrarian Registry, not Diia',
     sys.includes('State Agrarian Registry (NOT Diia)'));
+  // Hard-wrapped prompt text means a literal phrase can straddle a newline.
+  // Normalise whitespace once, then assert the phrase, not the line breaks.
+  const flat = sys.replace(/\s+/g, ' ');
+
+  // --- The process reference: separate block, different rules
+  check('process reference reaches the API',
+    sys.includes('HOW UKRAINIAN FARM SUPPORT ACTUALLY WORKS'));
+  check('process material may be stated without searching first',
+    flat.includes('You MAY state the things in this section directly, without searching first'));
+  check('State Agrarian Register named as the gate',
+    sys.includes('THE GATE BEFORE EVERY OTHER GATE') && sys.includes('dar.gov.ua'));
+  check('the electronic signature obstacle is called out',
+    flat.includes('The КЕП is the real obstacle'));
+  check('which-door routing is given for each body',
+    sys.includes('WHICH DOOR FOR WHICH PROGRAMME') &&
+    sys.includes('NOT Diia') && sys.includes('eca.gov.ua'));
+  check('all four legal forms are distinguished',
+    sys.includes('ОСГ') && sys.includes('ФОП') && sys.includes('ФГ') && sys.includes('ТОВ'));
+  check('Kolos is told to ask which legal form rather than assume',
+    flat.includes('ASK, in one short question'));
+  check('common disqualifiers are listed, tax debt first',
+    sys.includes('WHAT COMMONLY DISQUALIFIES') && sys.includes('податковий борг'));
+
+  // --- Section 8: the credit guarantee fund
+  check('credit guarantee fund is in the reference',
+    sys.includes('PARTIAL CREDIT GUARANTEE FUND'));
+  check('fund URL is the verified one', sys.includes('https://pcgf.com.ua/'));
+  check('fund is framed as neither grant nor loan',
+    flat.includes('NOT a grant and NOT a loan'));
+  check('farmers are told to go via a lender, never direct',
+    sys.includes('Never directly'));
+  check('unstated guarantee percentage is flagged as unstated',
+    flat.includes('are NOT stated on the Fund'));
+
+  // --- Section 9: demining
+  check('demining compensation is in the reference',
+    sys.includes('HUMANITARIAN DEMINING COMPENSATION'));
+  check('demining is sequenced before other funding',
+    flat.includes('comes BEFORE every other kind of funding'), 
+    flat.slice(flat.indexOf('HUMANITARIAN DEMINING'), flat.indexOf('HUMANITARIAN DEMINING') + 200));
+  check('the 80% figure is tied to its 2024 vintage',
+    flat.includes('80% of the cost of demining') &&
+    flat.includes('Treat all of these as 2024 figures'));
+  check('missing application route is admitted, not invented',
+    flat.includes('was NOT specified in the source consulted'));
+
+  // --- Section 7: the ECA war-damage programme, from a primary source
+  check('ECA war-damage programme is in the reference',
+    sys.includes('WAR DAMAGE COMPENSATION AND WAR-RISK INSURANCE'));
+  check('marked as a primary source, unlike sections 1-6',
+    sys.includes('[PRIMARY SOURCE'));
+  check('names the administering agency, not a ministry',
+    sys.includes('Export Credit Agency'));
+  check('names the legal basis exactly',
+    sys.includes('Resolution No. 1541 of') && sys.includes('28 November 2025'));
+  check('carries the verified application URL',
+    sys.includes('https://www.eca.gov.ua/produkty/pk/'));
+  check('lists all four eligible property categories',
+    sys.includes('production equipment') && sys.includes('buildings and structures') &&
+    sys.includes('individual premises') && sys.includes('engineering networks'));
+  check('warns that the property list is closed, not indicative',
+    /do not assume it\s*\n?\s*qualifies/i.test(sys) || sys.includes('do not assume it'));
+  check('explains the insurance component turns on location and policy terms',
+    sys.includes('LOCATION of the property') && sys.includes('TERMS of the'));
+  check('tells the farmer a contribution must be paid',
+    sys.includes('there IS a contribution to pay'));
+  check('states no invented amount or deadline for this programme',
+    sys.includes('contains NO amounts, percentages, deadlines'));
+  check('gives Ukrainian-language search hints',
+    sys.includes('постанова 1541'));
+  check('reference header flags mixed provenance',
+    sys.includes('Provenance is mixed'));
+
   console.log('  info: system prompt is ' + sys.length + ' chars (~' +
     Math.round(sys.length / 3.7) + ' tokens, estimated)');
 

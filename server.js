@@ -136,15 +136,34 @@ const CONTENT_TYPES = {
   '.woff2': 'font/woff2',
 };
 
-// Files in this folder that must never be served over HTTP, even though they
-// sit next to the HTML. Belt and braces: .env is also excluded by the dotfile
-// rule below, but being explicit costs nothing and this is the file that ends
-// careers.
+/**
+ * What must never be served over HTTP.
+ *
+ * Rules first, filenames second. The original version was a hand-maintained
+ * list of names, and adding a `reference-sources/` folder immediately exposed
+ * its contents — a list like that is only ever as current as the last person to
+ * remember it. So: whole directories are blocked by prefix, and the extensions
+ * the app has no reason to serve are blocked outright. The explicit names below
+ * are belt and braces on top of both.
+ *
+ * The app is a single self-contained HTML file, so nothing here needs to serve
+ * .js, .json or .md at all.
+ */
+const DENY_DIRS = ['api/', 'test/', 'reference-sources/', 'node_modules/', '.git/'];
+const DENY_EXTENSIONS = new Set(['.js', '.mjs', '.json', '.md', '.example', '.log']);
 const DENY = new Set([
-  'server.js', 'package.json', 'vercel.json',
-  '.env', '.env.example', '.gitignore',
-  'BUILD_NOTES.md', 'DEPLOY.md', 'README.md', 'HANDOVER.md',
+  'server.js', 'package.json', 'vercel.json', 'package-lock.json',
+  '.env', '.env.example', '.gitignore', '.vercelignore',
+  'BUILD_NOTES.md', 'DEPLOY.md', 'README.md', 'HANDOVER.md', 'WAYPOINT.md',
 ]);
+
+function isForbidden(rel, base) {
+  if (base.startsWith('.')) return true;
+  if (DENY.has(base)) return true;
+  if (DENY_EXTENSIONS.has(path.extname(base).toLowerCase())) return true;
+  const normalised = rel.replace(/\\/g, '/');
+  return DENY_DIRS.some((dir) => normalised === dir.slice(0, -1) || normalised.startsWith(dir));
+}
 
 /** Give the Vercel-style handlers the response methods they expect. */
 function shimResponse(res) {
@@ -212,7 +231,7 @@ function serveStatic(res, pathname) {
   }
 
   const base = path.basename(full);
-  if (base.startsWith('.') || DENY.has(base) || rel.startsWith('test/') || rel.startsWith('api/')) {
+  if (isForbidden(rel, base)) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('Not found');
   }

@@ -103,6 +103,14 @@ async function run() {
     ['test sources are not served', '/test/test-server.js', 404],
     ['.gitignore is not served', '/.gitignore', 404],
     ['BUILD_NOTES.md is not served', '/BUILD_NOTES.md', 404],
+    ['reference sources are not served', '/reference-sources/2026-08-03_ECA_war-damage-compensation.md', 404],
+    ['nested reference source is not served', '/reference-sources/anything.md', 404],
+    ['WAYPOINT.md is not served', '/WAYPOINT.md', 404],
+    ['.vercelignore is not served', '/.vercelignore', 404],
+    ['package.json is not served', '/package.json', 404],
+    ['vercel.json is not served', '/vercel.json', 404],
+    ['any .md is refused by extension, not by name', '/anything-at-all.md', 404],
+    ['any .js is refused by extension', '/whatever.js', 404],
     ['unknown path 404s', '/nope', 404],
   ]) {
     const r = await fetch(BASE + url);

@@ -8,7 +8,9 @@ pause_turn handling after the first production failure (§13),
 resume ceiling and self-diagnosis (§14),
 guaranteed complete answers (§15),
 prefill rejection and answer salvage (§16),
-inline links in answers (§17).
+inline links in answers (§17),
+first primary-source reference entry (§18),
+knowledge split by volatility (§19).
 **Scope:** assemble the deployable file set, verify it, and record where
 `HANDOVER.md` and `README.md` no longer match what the files actually contain.
 
@@ -160,10 +162,11 @@ kolos/
 ├── .gitignore                   excludes .env, .vercel, node_modules
 ├── server.js                    self-hosted server, zero dependencies
 ├── DEPLOY.md                    deploy guide: managed hosting or your own server
+├── reference-sources/           provenance for the programme reference
 ├── test/
 │   ├── test-handler.js          59 checks on the request handlers
-│   ├── test-server.js           60 checks: server.js live, plus deploy config
-│   └── test-frontend.js         101 checks driving the UI in headless Chromium
+│   ├── test-server.js           68 checks: server.js live, plus deploy config
+│   └── test-frontend.js         133 checks driving the UI in headless Chromium
 └── BUILD_NOTES.md               this file
 ```
 
@@ -1224,3 +1227,231 @@ survive escaping; the served HTML has no NUL or control characters; and the
 prompt carries both the placement rule and the no-invented-URLs rule.
 
 Build `2026-08-03.9`.
+
+---
+
+## 18. First primary-source addition to the reference
+
+An official written reply from ПрАТ «Експортно-кредитне агентство» (the Export
+Credit Agency) describing the programme of partial compensation for business
+property destroyed or damaged by Russian armed aggression, and partial
+compensation of war-risk insurance premiums.
+
+### It was handed over labelled as veteran funding
+
+It is not. Filing it there would have had Kolos answer veteran-status questions
+with a war-damage scheme, which is a wrong answer delivered confidently. Filed
+under its actual subject as section 7 instead, and the mismatch reported rather
+than quietly corrected — if a veteran-funding document exists, it has not
+arrived.
+
+### Why it earns its place
+
+It fills a genuine hole. The **Rebuilding after war damage** front-page chip had
+nothing better to answer with than the general 0.1% restoration-loan line inside
+the 5-7-9% programme. This is a dedicated compensation scheme with a named
+administering body and a working application page.
+
+It is also the best-sourced thing in the reference. Sections 1 to 6 were
+compiled from web search; this came from the agency that runs the programme, in
+writing. The reference header now states that provenance is mixed and section 7
+carries a `[PRIMARY SOURCE]` tag.
+
+### What was encoded, and what deliberately was not
+
+Encoded: both components; the legal basis (Cabinet Resolution No. 1541 of 28
+November 2025); that ECA administers it rather than a ministry or Diia; the four
+property categories eligible under the damage component and that the list is
+closed; that the insurance component turns on the property's **location** and
+the **insurance contract terms** rather than the type of property; that a
+contribution must be paid; and that ECA cannot amend the rules or grant
+exceptions.
+
+Not encoded: any amount, percentage, deadline or application window. The reply
+states none, so none was invented. Section 7 says this explicitly so the model
+cannot fill the gap from memory.
+
+Links were verified rather than reconstructed. `https://www.eca.gov.ua/produkty/pk/`
+was confirmed by direct fetch. `zakon.rada.gov.ua` blocks automated fetching, so
+no link to the consolidated legal text is included — the resolution number is
+given so it can be searched. The resolution PDF on kmu.gov.ua is included from
+search results.
+
+Ukrainian search hints are included, because the authoritative material is
+Ukrainian and an English-only search misses most of it.
+
+### Provenance kept, not just summarised
+
+`reference-sources/2026-08-03_ECA_war-damage-compensation.md` holds the original
+correspondence verbatim alongside the structured summary. A reference section
+that cannot be audited against its source is a claim, not a citation.
+
+### A hole that folder immediately exposed
+
+`server.js` refused a hand-maintained list of filenames plus the `api/` and
+`test/` prefixes. Adding `reference-sources/` meant its contents were publicly
+servable on a self-hosted deploy — caught by a test written at the same time,
+which failed with a 200.
+
+That list was the wrong shape. It is now rules first: whole directories blocked
+by prefix, and `.js`, `.json`, `.md`, `.example` and `.log` refused by extension
+outright, since a self-contained single-page app has no reason to serve any of
+them. The explicit filenames remain as belt and braces. Tests now assert the
+class, not the instance — `/anything-at-all.md` is refused because of what it
+is, not because someone remembered to list it.
+
+`.vercelignore` excludes the folder too, so it never reaches Vercel at all.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 59 checks
+node test/test-server.js      # 68 checks
+node test/test-frontend.js    # 113 checks
+```
+
+240 checks. New ones: section 7 is present and tagged primary-source; the
+administering agency, legal basis and verified application URL are all carried;
+all four property categories are listed; the closed-list warning survives; the
+insurance component's location and contract-terms conditions are stated; the
+contribution is flagged; the no-amounts rule is explicit; Ukrainian search hints
+are present; the header declares mixed provenance; and seven new static-serving
+refusals covering directories and extensions rather than names.
+
+Build `2026-08-03.10`.
+
+---
+
+## 19. Splitting knowledge by how fast it decays
+
+Three additions, and one structural change that matters more than any of them.
+
+### The structural change
+
+Everything used to live in one `PROGRAMME_REFERENCE` block under one rule: never
+state a figure or deadline without confirming it by live search this turn. That
+rule is right for programmes and wrong for process.
+
+Amounts and windows go stale in months. How you register, what a qualified
+electronic signature is, which body runs which portal, what disqualifies an
+application — that moves on a scale of years. Forcing Kolos to hedge on the
+second category produced a worse advisor, not a safer one. A farmer asking "do I
+need to register somewhere before any of this is available to me?" was getting a
+hedged answer to a question whose answer will still be true in 2028.
+
+So there are now two blocks with different rules:
+
+- **`PROCESS_REFERENCE`** — stable. Kolos MAY state it directly. Review yearly.
+- **`PROGRAMME_REFERENCE`** — volatile. Strict no-unverified-figures rule
+  unchanged. Review monthly.
+
+Process comes first in the prompt, because it is the gate that precedes the
+offers. New material goes in whichever block matches its volatility, not
+whichever is nearer.
+
+### What went into the process block
+
+**The State Agrarian Register as the gate before every other gate.** Most state
+support runs through it; an unregistered farmer cannot apply at all however
+eligible they are. Verified from dar.gov.ua: open to all producers regardless of
+size, including household plots, ФОП and legal entities of any form.
+
+**The qualified electronic signature, called out by name.** Registration needs a
+КЕП, an email, a phone and a computer. Three of those every farmer has. The КЕП
+is the one they probably do not, and it cannot be obtained in the same sitting.
+That single fact is the difference between "register at dar.gov.ua" and advice
+someone can act on.
+
+**Which door for which programme.** Register vs Diia vs partner banks vs ECA vs
+oblast administration, with the counter-intuitive ones flagged — livestock
+subsidies are the Register, not Diia, and they are different systems, so an
+application to the wrong one is simply lost time.
+
+**Legal form decides the tier.** ОСГ, ФОП, ФГ and ТОВ are distinguished, with
+the instruction to ASK which one the farmer is rather than assume or answer for
+all four at once. Some programmes are written for a "суб'єкт господарювання" and
+exclude a private individual outright; the ECA scheme is one.
+
+**Common disqualifiers**, tax debt first. Presented as verified for the demining
+programme and worth checking elsewhere, not as a universal rule, because only
+one instance was confirmed. Tax debt is singled out because it catches farmers
+doing nothing wrong and is fixable in advance if they know to look.
+
+### Section 8 — Partial Credit Guarantee Fund
+
+The answer to "the bank refused me because I have no collateral", which is the
+most common reason a small Ukrainian farm cannot borrow. Neither a grant nor a
+loan: it covers part of the lender's risk so a bank can say yes.
+
+The critical practical point, stated as such: applications go **through a
+partner bank or non-bank institution with a business plan, never directly to the
+Fund**. A farmer who contacts the Fund has gone to the wrong place.
+
+Paired with the 5-7-9% scheme rather than offered as an alternative — that
+programme sets the rate, this is what makes a lender approve at all.
+
+The guarantee percentage and any limit are not published on the Fund's homepage.
+Section 8 says so rather than supplying them.
+
+### Section 9 — Humanitarian demining compensation
+
+Sequenced explicitly ahead of everything else in the reference: machinery grants
+are meaningless on fields nobody can safely enter.
+
+Verified as approved in 2024: 80% of the cost of demining a plot, once per plot,
+UAH 3 billion allocated, prices set by open Prozorro tender, Ministry of Economy
+administering, approved 12 March 2024. Every figure carries an explicit 2024
+vintage warning and an instruction to confirm the current year first.
+
+The application route was not stated in the source, so section 9 says it was not
+stated rather than inventing one.
+
+### Two new chips
+
+**"The bank refused me"** and **"My land needs demining"**, in both languages.
+Both are farmer situations the previous ten did not cover, and both now have
+material behind them. Twelve chips total.
+
+### Provenance and honesty about sourcing
+
+`reference-sources/2026-08-03_process-and-two-programmes.md` records what each
+source did and did not establish. These are public sources I researched, not
+correspondence from an agency, so they carry `[STATUS UNVERIFIED]` rather than
+the `[PRIMARY SOURCE]` tag the ECA entry earned. The reference should be honest
+about which parts came from an agency in writing and which came from me reading
+government websites.
+
+### A test bug worth noting
+
+Several new assertions failed on phrases that straddle a line break, because the
+prompt text is hard-wrapped. Fixed by normalising whitespace once and asserting
+against that, rather than by weakening the assertions to substring fragments
+that would have passed for the wrong reasons.
+
+### Cost
+
+System prompt is now about 29,400 characters, roughly 8,000 tokens, up from
+5,700. Cached that is a fraction of a cent per message. The reason for splitting
+rather than piling on is dilution, not money: two focused blocks the model can
+navigate beat one long one it wades through. Retrieval — injecting only relevant
+sections — remains the right move above roughly 10,000 tokens and premature
+below it.
+
+### Test coverage
+
+```bash
+node test/test-handler.js     # 59 checks
+node test/test-server.js      # 68 checks
+node test/test-frontend.js    # 133 checks
+```
+
+260 checks. Twenty new ones covering: the process block reaches the API and
+declares its looser rule; the Register is named as the gate and the КЕП as the
+obstacle; the routing table names each body; all four legal forms appear and
+Kolos is told to ask rather than assume; the disqualifier list leads with tax
+debt; the Fund is framed as neither grant nor loan with the never-directly rule
+and the unpublished percentage flagged as unpublished; demining is sequenced
+first, its 80% tied to its 2024 vintage, and its missing application route
+admitted; twelve chips render with both new ones present in both languages.
+
+Build `2026-08-03.11`.

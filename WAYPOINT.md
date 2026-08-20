@@ -1,7 +1,8 @@
 # Kolos — working waypoint
 
-**Build:** `2026-08-03.11`
-**Status:** live and working in production, verified 3 August 2026
+**Build:** `2026-08-20.12` (built and tested; **not yet deployed** — live is `.11`)
+**Status:** `.11` live on `kolos-5knq`. `.12` adds History, edit-and-re-ask, and
+fixes two defects that are live in `.11` right now — see below.
 **Git tag:** `working-2026-08-03.8` (last production-verified); `.11` adds inline links, the ECA programme, a process reference and two more programmes
 
 Read this first. `BUILD_NOTES.md` is the full history and is long; this is the
@@ -13,7 +14,8 @@ state of things and what to do next.
 
 | | |
 |---|---|
-| Live site | https://kolos-5knq.vercel.app |
+| Live site | https://kolos-5knq.vercel.app — **this one only** |
+| Deleted | `kolos-ecru.vercel.app` was a *second* Vercel project fed by the same repo, with no `ANTHROPIC_API_KEY`, so every question there failed with "Server is not configured with an API key". Deleted 11 August 2026. If a Kolos URL ever gives that error again, check you are not on a duplicate project before touching the key. |
 | Health / build check | https://kolos-5knq.vercel.app/api/healthz |
 | GitHub | `LeeKerr-Code/Kolos` (personal account, not an org — Vercel Hobby cannot use org repos) |
 | Vercel project | `kolos-5knq`, Hobby plan |
@@ -45,12 +47,13 @@ Verified in production, not just in tests:
 - Conversation persists across reload; export works.
 - API key is server-side only and never reaches the browser.
 
-**260 checks** pass across three suites:
+**284 checks** pass across four suites:
 
 ```bash
 node test/test-handler.js     # 59 — request handling, continuations, salvage
 node test/test-server.js      # 68 — server.js live, plus deploy config
 node test/test-frontend.js    # 133 — the UI in headless Chromium
+node test/test-history.js     # 24 — History drawer, edit-and-re-ask, v1 migration
 ```
 
 None of them spend API credit.
@@ -90,6 +93,23 @@ nearer 6.6¢.
 
 ---
 
+## Fixed in `.12`, still broken in production
+
+**A returning visitor got no localisation.** `applyLanguage()` wrote to elements
+inside the welcome panel, which `restoreState()` removes as soon as a saved
+conversation exists. The first null threw and aborted the function part-way, so
+chips, profile dropdowns, the input placeholder and the disclaimer were never
+localised for anyone coming back to a saved chat. Every write is now guarded.
+Found by accident while testing History; it has been live since at least `.11`.
+
+**`max_tokens` was pinned at 1200 by the front end.** `api/chat.js` defaults to
+8000, but the browser sent 1200 and `Math.min(Number(max_tokens) || 8000, 8192)`
+took it verbatim. Answers still completed, because `max_tokens` is `RESUMABLE`,
+but a long answer burned several continuation legs where one would do — each
+re-sending the whole conversation. Now sends 8000, as BUILD_NOTES always said.
+
+---
+
 ## Open items, in priority order
 
 **1. Rate limiting is not durable.** 20 questions per hour per visitor, counted
@@ -98,10 +118,24 @@ when it recycles, which on the free plan is often. Treat it as a speed bump.
 Replace with Vercel KV or Upstash before the URL is shared publicly. Swap point
 is marked in `api/chat.js`.
 
-**2. Nobody with Ukrainian agri-funding knowledge has reviewed the answers.**
-This is the gate before a farmer acts on anything Kolos says. Have someone
-qualified read a dozen answers against the reference brief. Kolos is instructed
-never to state an unverified figure, which reduces the risk without removing it.
+**2. Human auditors are coming on board (confirmed 20 August 2026).**
+This was the gate before a farmer could safely act on anything Kolos says, and it
+is being closed. Still to settle before it counts as done:
+
+- **What they audit and how often.** Sampling after publication and reviewing
+  before publication are different products with different costs and different
+  permissible marketing claims. Decide which.
+- **How findings get back into the build.** An auditor finding is only worth
+  anything if a correction reaches `PROGRAMME_REFERENCE` with provenance in
+  `reference-sources/`. Without that loop the audit produces opinions, not fixes.
+- **Their real cost.** The cost model in both Elishka emails carries a £185/month
+  estimate for roughly four hours. Replace it with the actual figure.
+- **Start them on Kolos Light.** Three fixed answers is a small, bounded first
+  job that proves the process before it meets an open-ended agent.
+
+Until an auditor has actually signed off answers, no marketing material may claim
+the answers are checked by a specialist. See `COMPETITIVE_PRICING.md` and the
+marketing description for the claim rules.
 
 **3. Vercel Hobby is non-commercial only.** Their fair use guidelines define
 commercial usage as any deployment for the financial gain of anyone involved in

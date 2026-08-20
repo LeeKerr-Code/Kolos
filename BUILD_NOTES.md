@@ -1455,3 +1455,60 @@ first, its 80% tied to its 2024 vintage, and its missing application route
 admitted; twelve chips render with both new ones present in both languages.
 
 Build `2026-08-03.11`.
+
+---
+
+## 20. Build `2026-08-20.12` — History, edit-and-re-ask, two production fixes
+
+Tester feedback: *"can we incorporate a history option so users can go back to a
+previous question if needed to change answers?"*
+
+### What was there before
+
+`conversation` was a single flat array in `localStorage` under `kolos_state_v1`,
+and **New chat deleted it**. There was no way to revisit a question and no record
+of previous chats.
+
+### What `.12` adds
+
+- **History drawer** (`#historyBtn`). Lists every question in the current chat;
+  tapping one scrolls to it in the thread. Below that, previously saved chats.
+- **Edit and re-ask.** Edit any earlier question. Everything after it is
+  discarded, because those answers were produced in a context that no longer
+  exists, and the user is told how many answers that is before committing.
+- **New chat archives instead of destroying.** Empty chats are dropped on save so
+  the list stays honest.
+- **Storage v2.** `kolos_state_v2` holds `{lang, profile, chats[], activeChatId}`.
+  A v1 state is migrated into a single chat on first load, and **the v1 key is
+  left in place** so rolling back the deploy loses nothing. Migration persists
+  immediately, so a visitor who migrates and leaves does not re-migrate.
+
+### Two defects found while testing, both live in `.11`
+
+**`applyLanguage()` threw for every returning visitor.** It wrote to elements
+inside the welcome panel, which `restoreState()` removes when a saved
+conversation exists. The first null aborted the function, so chips, profile
+dropdowns, placeholder and disclaimer were never localised for anyone coming
+back. Confirmed against the `.11` file, not just inferred. Every write is now
+guarded by a `setText` helper, and `chipGrid` is null-checked.
+
+This is why the console check in "How to update" is not a formality — the page
+looked fine, and the failure only showed on a *second* visit.
+
+**`max_tokens: 1200` in the front end overrode the 8000 default.** The handler
+computes `Math.min(Number(max_tokens) || 8000, 8192)`, so a supplied 1200 wins.
+Answers still completed via the resume loop, which is why nobody noticed, but
+long answers were spending several legs — and every leg re-sends the whole
+conversation. Now sends 8000.
+
+### Tests
+
+New suite `test/test-history.js`, 24 checks: drawer contents, jump-to-question,
+edit-and-re-ask truncation, what the re-ask actually sends upstream, New chat
+archiving, chat switching, reload persistence, v1→v2 migration, and a guard on
+`max_tokens` so the ceiling cannot silently regress again. 284 checks now pass
+across four suites. None spend API credit.
+
+### Not done
+
+Deployment. `.12` is built and tested but live is still `.11`.

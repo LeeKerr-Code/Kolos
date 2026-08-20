@@ -211,6 +211,59 @@
   .profile-saved-note{font-size:11.5px; color:var(--success); margin-top:8px; display:none;}
   .profile-saved-note.show{display:block;}
 
+  /* ===== History drawer ===== */
+  .drawer-scrim{
+    position:fixed; inset:0; background:rgba(11,43,43,0.45);
+    opacity:0; pointer-events:none; transition:opacity .18s; z-index:40;
+  }
+  .drawer-scrim.open{opacity:1; pointer-events:auto;}
+  .drawer{
+    position:fixed; top:0; right:0; bottom:0; width:min(380px,90vw);
+    background:var(--panel); border-left:1px solid var(--line);
+    transform:translateX(100%); transition:transform .2s; z-index:41;
+    display:flex; flex-direction:column;
+  }
+  .drawer.open{transform:translateX(0);}
+  .drawer-head{
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px; border-bottom:1px solid var(--line);
+  }
+  .drawer-head h2{margin:0; font-family:var(--font-display); font-size:16px; flex:1;}
+  .drawer-body{overflow-y:auto; padding:12px 14px 24px; flex:1;}
+  .drawer-section{font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--muted); margin:14px 0 8px; font-weight:600;}
+  .hist-item{
+    display:flex; gap:8px; align-items:flex-start;
+    width:100%; text-align:left; background:#fff; border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; margin-bottom:8px; font:inherit;
+    font-size:13.5px; color:var(--ink); cursor:pointer;
+  }
+  .hist-item:hover{border-color:var(--teal); background:var(--teal-tint);}
+  .hist-item.active{border-color:var(--teal); background:var(--teal-tint); font-weight:600;}
+  .hist-item .num{color:var(--muted); font-variant-numeric:tabular-nums; flex:0 0 auto;}
+  .hist-item .txt{flex:1; overflow:hidden; text-overflow:ellipsis;}
+  .hist-item .meta{display:block; font-size:11.5px; color:var(--muted); font-weight:400; margin-top:3px;}
+  .hist-edit{
+    flex:0 0 auto; background:transparent; border:1px solid var(--line);
+    border-radius:7px; padding:3px 8px; font:inherit; font-size:11.5px;
+    color:var(--muted); cursor:pointer;
+  }
+  .hist-edit:hover{border-color:var(--teal); color:var(--teal-dark);}
+  .drawer-empty{color:var(--muted); font-size:13px; padding:6px 2px;}
+  /* .ghost-btn is styled for the dark header (white on teal). Reskin it for
+     the cream drawer, or Close and the edit actions render white-on-cream. */
+  .drawer .ghost-btn{
+    background:#fff; border:1px solid var(--line); color:var(--teal-dark);
+  }
+  .drawer .ghost-btn:hover{border-color:var(--teal); background:var(--teal-tint);}
+  .edit-box{width:100%; margin-top:8px;}
+  .edit-box textarea{
+    width:100%; font:inherit; font-size:14px; padding:9px 11px; border-radius:10px;
+    border:1px solid var(--line); background:#fff; color:var(--ink); resize:vertical; min-height:70px;
+  }
+  .edit-actions{display:flex; gap:8px; margin-top:8px;}
+  .edit-warn{font-size:12px; color:var(--warning); margin-top:6px;}
+
   /* ===== Messages ===== */
   .msg-row{display:flex; gap:10px;}
   .msg-row.user{justify-content:flex-end;}
@@ -454,6 +507,7 @@
         <button id="langEn" class="active" data-lang="en">EN</button>
         <button id="langUk" data-lang="uk">UA</button>
       </div>
+      <button class="ghost-btn" id="historyBtn">History</button>
       <button class="ghost-btn" id="exportBtn">Export chat</button>
       <button class="ghost-btn" id="resetBtn">New chat</button>
     </div>
@@ -512,6 +566,15 @@
   </div>
 </footer>
 
+<div class="drawer-scrim" id="histScrim"></div>
+<aside class="drawer" id="histDrawer" aria-hidden="true">
+  <div class="drawer-head">
+    <h2 id="histTitle">History</h2>
+    <button class="ghost-btn" id="histClose">Close</button>
+  </div>
+  <div class="drawer-body" id="histBody"></div>
+</aside>
+
 <script>
 /* =========================================================================
    IMPORTANT — backend requirement
@@ -534,7 +597,7 @@ const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
 /* Must match BUILD in api/healthz.js. A test enforces it.
    Check which build is actually live by visiting /api/healthz. */
-const KOLOS_BUILD = '2026-08-03.11';
+const KOLOS_BUILD = '2026-08-20.12';
 console.log('Kolos build ' + KOLOS_BUILD);
 
 const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
@@ -925,6 +988,21 @@ const UI = {
     disclaimer: "Kolos searches the web for current information but can make mistakes and is not a substitute for professional financial or legal advice. Always confirm eligibility, deadlines and application details directly with the funding body before applying.",
     newChat: "New chat",
     exportBtn: "Export chat",
+    historyBtn: "History",
+    historyTitle: "History",
+    close: "Close",
+    thisChat: "Questions in this chat",
+    savedChats: "Saved chats",
+    noQuestions: "You haven't asked anything yet.",
+    noSaved: "No saved chats yet.",
+    editLabel: "Edit",
+    editSave: "Ask again",
+    editCancel: "Cancel",
+    editWarnOne: "Asking again will remove the 1 later answer in this chat.",
+    editWarnMany: "Asking again will remove the {n} later answers in this chat.",
+    untitled: "Untitled chat",
+    msgsCount: "{n} questions",
+    currentChat: "Current",
     profileToggle: "Tell Kolos about your farm (optional)",
     profileHint: "Kolos will factor these details into its search and answer.",
     regionLabel: "Region / oblast",
@@ -974,6 +1052,21 @@ const UI = {
     disclaimer: "Kolos шукає актуальну інформацію в інтернеті, але може помилятися і не замінює професійну фінансову чи юридичну консультацію. Завжди перевіряйте право на участь, дедлайни та деталі заявки безпосередньо у фонду підтримки перед поданням заявки.",
     newChat: "Новий чат",
     exportBtn: "Експортувати чат",
+    historyBtn: "Історія",
+    historyTitle: "Історія",
+    close: "Закрити",
+    thisChat: "Питання в цьому чаті",
+    savedChats: "Збережені чати",
+    noQuestions: "Ви ще нічого не запитали.",
+    noSaved: "Збережених чатів поки немає.",
+    editLabel: "Змінити",
+    editSave: "Запитати ще раз",
+    editCancel: "Скасувати",
+    editWarnOne: "Повторний запит видалить 1 наступну відповідь у цьому чаті.",
+    editWarnMany: "Повторний запит видалить наступні відповіді ({n}) у цьому чаті.",
+    untitled: "Чат без назви",
+    msgsCount: "питань: {n}",
+    currentChat: "Поточний",
     profileToggle: "Розкажіть Kolos про своє господарство (необов'язково)",
     profileHint: "Kolos враховуватиме ці дані у пошуку та відповіді.",
     regionLabel: "Область / регіон",
@@ -1368,6 +1461,7 @@ async function sendMessage(text){
 
   conversation.push({ role: 'user', text });
   renderUserMessage(text);
+  tagRows();
   renderTyping();
   persistState();
 
@@ -1377,7 +1471,7 @@ async function sendMessage(text){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system: buildSystemPrompt(),
-        max_tokens: 1200,
+        max_tokens: 8000,
         messages: buildMessages(),
       })
     });
@@ -1443,31 +1537,43 @@ async function sendMessage(text){
 /* ===== Language ===== */
 function applyLanguage(){
   const t = UI[lang];
+  /* The welcome panel is removed from the DOM once a conversation exists, so
+     these lookups return null for any returning visitor. Before build .12 the
+     first such null threw, aborting applyLanguage part-way: chips, profile
+     dropdowns, placeholder and disclaimer were then never localised. Guard
+     every write so a missing element is skipped rather than fatal. */
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   document.documentElement.lang = lang === 'uk' ? 'uk' : 'en';
-  document.getElementById('tagline').textContent = t.tagline;
-  document.getElementById('welcomeEyebrow').textContent = t.eyebrow;
-  document.getElementById('welcomeHeading').textContent = t.heading;
-  document.getElementById('welcomeIntro').textContent = t.intro;
-  document.getElementById('resetBtn').textContent = t.newChat;
-  document.getElementById('exportBtn').textContent = t.exportBtn;
-  document.getElementById('profileToggleLabel').textContent = t.profileToggle;
-  document.getElementById('profileHint').textContent = t.profileHint;
-  document.getElementById('lblRegion').textContent = t.regionLabel;
+  setText('tagline', t.tagline);
+  setText('welcomeEyebrow', t.eyebrow);
+  setText('welcomeHeading', t.heading);
+  setText('welcomeIntro', t.intro);
+  setText('resetBtn', t.newChat);
+  setText('exportBtn', t.exportBtn);
+  setText('historyBtn', t.historyBtn);
+  setText('histTitle', t.historyTitle);
+  setText('histClose', t.close);
+  if (histDrawer.classList.contains('open')) renderHistory();
+  setText('profileToggleLabel', t.profileToggle);
+  setText('profileHint', t.profileHint);
+  setText('lblRegion', t.regionLabel);
   fRegion.placeholder = t.regionPlaceholder;
-  document.getElementById('lblSector').textContent = t.sectorLabel;
-  document.getElementById('lblSize').textContent = t.sizeLabel;
-  document.getElementById('profileSave').textContent = t.saveProfile;
-  document.getElementById('profileClear').textContent = t.clearProfile;
+  setText('lblSector', t.sectorLabel);
+  setText('lblSize', t.sizeLabel);
+  setText('profileSave', t.saveProfile);
+  setText('profileClear', t.clearProfile);
   inputEl.placeholder = t.placeholder;
-  document.getElementById('disclaimer').textContent = t.disclaimer;
+  setText('disclaimer', t.disclaimer);
 
   fSector.innerHTML = t.sectorOptions.map((opt, i) => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
   fSize.innerHTML = t.sizeOptions.map((opt, i) => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
   if (profile.sector) fSector.value = profile.sector;
   if (profile.size) fSize.value = profile.size;
 
+  // chipGrid lives inside the welcome panel, so it is absent once a
+  // conversation exists. Same guard as the setText calls above.
   const chipGrid = document.getElementById('chipGrid');
-  chipGrid.innerHTML = t.chips.map(c => `<button class="chip" data-q="${escapeHtml(c.q)}">${escapeHtml(c.label)}</button>`).join('');
+  if (chipGrid) chipGrid.innerHTML = t.chips.map(c => `<button class="chip" data-q="${escapeHtml(c.q)}">${escapeHtml(c.label)}</button>`).join('');
 
   langEnBtn.classList.toggle('active', lang === 'en');
   langUkBtn.classList.toggle('active', lang === 'uk');
@@ -1498,33 +1604,232 @@ profileClearBtn.addEventListener('click', () => {
   persistState();
 });
 
-/* ===== Persistence ===== */
+/* ===== Persistence =====
+   v2 keeps a list of chats instead of a single conversation, so "New chat"
+   archives rather than destroys. v1 state is migrated on first load and the
+   old key is left in place, so rolling back a deploy does not lose anything. */
+const STORAGE_KEY_V2 = 'kolos_state_v2';
+let chats = [];          // [{ id, title, updated, conversation:[...] }]
+let activeChatId = null;
+
+function newChatId(){ return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function chatTitleFrom(conv){
+  const first = conv.find(m => m.role === 'user');
+  return first ? first.text.slice(0, 80) : '';
+}
+
+function activeChat(){
+  let c = chats.find(x => x.id === activeChatId);
+  if (!c){
+    c = { id: newChatId(), title: '', updated: Date.now(), conversation: [] };
+    chats.unshift(c);
+    activeChatId = c.id;
+  }
+  return c;
+}
+
 function persistState(){
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ lang, conversation, profile }));
-  } catch (e) { /* localStorage unavailable (private mode, quota, etc.) — conversation just won't persist */ }
+    const c = activeChat();
+    c.conversation = conversation;
+    c.title = chatTitleFrom(conversation);
+    c.updated = Date.now();
+    // Drop empty chats other than the active one so the list stays honest.
+    chats = chats.filter(x => x.id === activeChatId || (x.conversation && x.conversation.length));
+    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify({ lang, profile, chats, activeChatId }));
+  } catch (e) { /* localStorage unavailable (private mode, quota) — state just won't persist */ }
+}
+
+function renderThread(){
+  clearFollowUps();
+  threadEl.querySelectorAll('.msg-row').forEach(el => el.remove());
+  if (!conversation.length){
+    if (welcomeEl && !welcomeEl.isConnected) threadEl.appendChild(welcomeEl);
+    return;
+  }
+  if (welcomeEl && welcomeEl.isConnected) welcomeEl.remove();
+  conversation.forEach(m => {
+    if (m.role === 'user') renderUserMessage(m.text);
+    else renderAgentMessage(m.text, m.sources || [], m.followUps || [], m.truncated);
+  });
+  tagRows();
+}
+
+/* Stamp each rendered row with its index in `conversation` so History can
+   scroll straight to a question. Rebuilt after every render. */
+function tagRows(){
+  const rows = threadEl.querySelectorAll('.msg-row:not(.typing)');
+  let i = 0;
+  rows.forEach(r => { if (i < conversation.length) r.dataset.idx = String(i++); });
 }
 
 function restoreState(){
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY_V2) || 'null'); }
   catch (e) { saved = null; }
+
+  if (!saved){
+    // Migrate a v1 single-conversation state, if there is one.
+    let legacy = null;
+    try { legacy = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
+    catch (e) { legacy = null; }
+    if (legacy){
+      const conv = Array.isArray(legacy.conversation) ? legacy.conversation : [];
+      saved = {
+        lang: legacy.lang,
+        profile: legacy.profile,
+        chats: conv.length ? [{ id: newChatId(), title: chatTitleFrom(conv), updated: Date.now(), conversation: conv }] : [],
+        activeChatId: null
+      };
+      if (saved.chats.length) saved.activeChatId = saved.chats[0].id;
+    }
+  }
   if (!saved) return;
 
   lang = saved.lang === 'uk' ? 'uk' : 'en';
   profile = saved.profile && typeof saved.profile === 'object' ? saved.profile : { region:'', sector:'', size:'' };
-  conversation = Array.isArray(saved.conversation) ? saved.conversation : [];
+  chats = Array.isArray(saved.chats) ? saved.chats.filter(c => c && Array.isArray(c.conversation)) : [];
+  activeChatId = saved.activeChatId || (chats[0] && chats[0].id) || null;
+
+  const c = chats.find(x => x.id === activeChatId);
+  conversation = c ? c.conversation : [];
 
   if (profile.region) fRegion.value = profile.region;
+  renderThread();
 
-  if (conversation.length){
-    if (welcomeEl) welcomeEl.remove();
-    conversation.forEach(m => {
-      if (m.role === 'user') renderUserMessage(m.text);
-      else renderAgentMessage(m.text, m.sources || [], m.followUps || [], m.truncated);
+  // If this load migrated v1 state, write v2 now. Otherwise a visitor who
+  // migrates and leaves without asking anything would re-migrate every time.
+  let hasV2 = false;
+  try { hasV2 = !!localStorage.getItem(STORAGE_KEY_V2); } catch (e) {}
+  if (!hasV2 && chats.length) persistState();
+}
+
+/* ===== History drawer ===== */
+const histScrim = document.getElementById('histScrim');
+const histDrawer = document.getElementById('histDrawer');
+const histBody = document.getElementById('histBody');
+
+function openHistory(){
+  renderHistory();
+  histDrawer.classList.add('open');
+  histScrim.classList.add('open');
+  histDrawer.setAttribute('aria-hidden','false');
+}
+function closeHistory(){
+  histDrawer.classList.remove('open');
+  histScrim.classList.remove('open');
+  histDrawer.setAttribute('aria-hidden','true');
+}
+
+function renderHistory(){
+  const t = UI[lang];
+  const questions = [];
+  conversation.forEach((m, i) => { if (m.role === 'user') questions.push({ i, text: m.text }); });
+
+  let html = '<div class="drawer-section">' + escapeHtml(t.thisChat) + '</div>';
+  if (!questions.length){
+    html += '<div class="drawer-empty">' + escapeHtml(t.noQuestions) + '</div>';
+  } else {
+    questions.forEach((q, n) => {
+      html += '<div class="hist-item" data-goto="' + q.i + '">' +
+        '<span class="num">' + (n + 1) + '.</span>' +
+        '<span class="txt">' + escapeHtml(q.text) + '</span>' +
+        '<button class="hist-edit" data-edit="' + q.i + '">' + escapeHtml(t.editLabel) + '</button>' +
+      '</div>';
     });
   }
+
+  const others = chats.filter(c => c.id !== activeChatId && c.conversation.length);
+  html += '<div class="drawer-section">' + escapeHtml(t.savedChats) + '</div>';
+  if (!others.length){
+    html += '<div class="drawer-empty">' + escapeHtml(t.noSaved) + '</div>';
+  } else {
+    others.slice().sort((a,b) => (b.updated||0) - (a.updated||0)).forEach(c => {
+      const count = c.conversation.filter(m => m.role === 'user').length;
+      html += '<div class="hist-item" data-chat="' + escapeHtml(c.id) + '">' +
+        '<span class="txt">' + escapeHtml(c.title || t.untitled) +
+        '<span class="meta">' + escapeHtml(t.msgsCount.replace('{n}', String(count))) + '</span>' +
+        '</span></div>';
+    });
+  }
+  histBody.innerHTML = html;
 }
+
+function switchChat(id){
+  persistState();
+  const c = chats.find(x => x.id === id);
+  if (!c) return;
+  activeChatId = id;
+  conversation = c.conversation;
+  renderThread();
+  persistState();
+  closeHistory();
+  scrollToBottom();
+}
+
+function beginEdit(idx){
+  const t = UI[lang];
+  const item = histBody.querySelector('[data-goto="' + idx + '"]');
+  if (!item || item.querySelector('textarea')) return;
+  const later = conversation.length - (idx + 1);
+  const answersAfter = conversation.slice(idx + 1).filter(m => m.role === 'assistant').length;
+  const warn = answersAfter === 1 ? t.editWarnOne : t.editWarnMany.replace('{n}', String(answersAfter));
+
+  const box = document.createElement('div');
+  box.className = 'edit-box';
+  const ta = document.createElement('textarea');
+  ta.value = conversation[idx].text;
+  box.appendChild(ta);
+  if (answersAfter > 0){
+    const w = document.createElement('div');
+    w.className = 'edit-warn';
+    w.textContent = warn;
+    box.appendChild(w);
+  }
+  const acts = document.createElement('div');
+  acts.className = 'edit-actions';
+  const ok = document.createElement('button');
+  ok.className = 'ghost-btn'; ok.textContent = t.editSave;
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost-btn'; cancel.textContent = t.editCancel;
+  acts.appendChild(ok); acts.appendChild(cancel);
+  box.appendChild(acts);
+  item.appendChild(box);
+  ta.focus();
+
+  cancel.addEventListener('click', (e) => { e.stopPropagation(); renderHistory(); });
+  ok.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const next = ta.value.trim();
+    if (!next || isLoading) return;
+    conversation = conversation.slice(0, idx);
+    const c = activeChat();
+    c.conversation = conversation;
+    renderThread();
+    persistState();
+    closeHistory();
+    sendMessage(next);
+  });
+}
+
+histScrim.addEventListener('click', closeHistory);
+document.getElementById('histClose').addEventListener('click', closeHistory);
+document.getElementById('historyBtn').addEventListener('click', openHistory);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHistory(); });
+
+histBody.addEventListener('click', (e) => {
+  const edit = e.target.closest('[data-edit]');
+  if (edit){ e.stopPropagation(); beginEdit(Number(edit.dataset.edit)); return; }
+  const chat = e.target.closest('[data-chat]');
+  if (chat){ switchChat(chat.dataset.chat); return; }
+  const go = e.target.closest('[data-goto]');
+  if (go){
+    const row = threadEl.querySelector('.msg-row[data-idx="' + go.dataset.goto + '"]');
+    closeHistory();
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
 
 /* ===== Export ===== */
 exportBtn.addEventListener('click', () => {
@@ -1572,9 +1877,18 @@ document.getElementById('chipGrid').addEventListener('click', (e) => {
 });
 
 resetBtn.addEventListener('click', () => {
+  // Archive the current chat instead of destroying it. It stays reachable
+  // from History; only an empty chat is dropped (see persistState).
+  persistState();
+  const fresh = { id: newChatId(), title: '', updated: Date.now(), conversation: [] };
+  chats.unshift(fresh);
+  activeChatId = fresh.id;
   conversation = [];
-  try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
-  location.reload();
+  renderThread();
+  persistState();
+  clearFollowUps();
+  inputEl.value = '';
+  inputEl.focus();
 });
 
 /* ===== Init ===== */

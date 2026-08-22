@@ -1512,3 +1512,31 @@ across four suites. None spend API credit.
 ### Not done
 
 Deployment. `.12` is built and tested but live is still `.11`.
+
+## 21. `2026-08-20.13` — empty suggestion chips for returning visitors
+
+Found by accident while recording a demo GIF of the live site: the welcome panel
+was on screen with no chips in it.
+
+`#chipGrid` is markup inside `#welcome`. `renderThread()` detaches that whole
+panel whenever a conversation exists and re-attaches the same node when the
+thread empties. `applyLanguage()` populated the grid with
+`document.getElementById('chipGrid')`, which returns null for a node that is not
+in the document — so on any load that restored a saved conversation, the chips
+were never written. Pressing **New chat** then re-attached a panel containing an
+empty grid.
+
+`.12` had made this silent. Before `.12` the same line threw and aborted
+`applyLanguage()` part-way; the `.12` fix guarded every write, which stopped the
+throw and left this one failing quietly instead. Guards hide symptoms — the
+lookup itself was wrong.
+
+Fixed by querying the panel rather than the document:
+`(welcomeEl && welcomeEl.querySelector('#chipGrid')) || document.getElementById('chipGrid')`.
+A detached node keeps its children, so the chips are populated either way.
+
+Worth recording how long this took to pin down: it was observed once, then four
+scripted reproduction attempts all rendered 12 chips and I nearly wrote it off.
+The reproduction only worked once the test drove the full returning-visitor path
+— conversation, reload, New chat — against the served page. The regression test
+in `test/test-history.js` does exactly that.

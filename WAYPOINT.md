@@ -1,8 +1,14 @@
 # Kolos — working waypoint
 
-**Build:** `2026-08-20.12` (built and tested; **not yet deployed** — live is `.11`)
-**Status:** `.11` live on `kolos-5knq`. `.12` adds History, edit-and-re-ask, and
-fixes two defects that are live in `.11` right now — see below.
+**Build:** `2026-08-20.13` — pushed 20 August, live state to be confirmed
+**Status:** `.12` deployed and confirmed live 20 August (History drawer seen
+working in production). `.13` fixes a real defect found while recording a demo:
+a returning visitor who pressed **New chat** got the welcome panel back with no
+suggestion chips in it. `#chipGrid` sits inside the welcome panel, which is
+detached from the document whenever a conversation exists, so
+`document.getElementById` could not find it and the chips were never populated.
+Now queried through `welcomeEl` itself. Regression test added — it fails against
+`.12` and passes against `.13`.
 **Git tag:** `working-2026-08-03.8` (last production-verified); `.11` adds inline links, the ECA programme, a process reference and two more programmes
 
 Read this first. `BUILD_NOTES.md` is the full history and is long; this is the
@@ -47,13 +53,13 @@ Verified in production, not just in tests:
 - Conversation persists across reload; export works.
 - API key is server-side only and never reaches the browser.
 
-**284 checks** pass across four suites:
+**286 checks** pass across four suites:
 
 ```bash
 node test/test-handler.js     # 59 — request handling, continuations, salvage
 node test/test-server.js      # 68 — server.js live, plus deploy config
 node test/test-frontend.js    # 133 — the UI in headless Chromium
-node test/test-history.js     # 24 — History drawer, edit-and-re-ask, v1 migration
+node test/test-history.js     # 26 — History, edit-and-re-ask, v1 migration, chip regression
 ```
 
 None of them spend API credit.
@@ -93,7 +99,7 @@ nearer 6.6¢.
 
 ---
 
-## Fixed in `.12`, still broken in production
+## Defects fixed in `.12` and `.13` (all were live in production)
 
 **A returning visitor got no localisation.** `applyLanguage()` wrote to elements
 inside the welcome panel, which `restoreState()` removes as soon as a saved
@@ -156,6 +162,38 @@ section 7 (ECA war-damage) is primary-source correspondence; sections 8-9
 with the demining figures carrying a 2024 vintage warning. Re-verify the
 programme sections monthly. Provenance for everything after section 6 is in
 `reference-sources/`.
+
+---
+
+## Going live on kolos.panterrea.com
+
+Planned 20 August 2026, not started. Do these in order.
+
+1. **Upgrade Vercel to Pro** ($20/user/month). Hobby is licensed for personal,
+   non-commercial use — taking subscription payments on it is a breach and risks
+   suspension. This is owed regardless of the subdomain.
+2. **Make rate limiting durable first.** Open item 1 below. In-memory counting is
+   survivable on an unlisted URL and not on a public branded one: it is the only
+   thing between an ad campaign and an uncapped Anthropic bill. Upstash free tier
+   covers expected volume.
+3. **Fix the deploy path before pointing DNS.** Today's method is dragging files
+   into GitHub's web UI, which has already put the wrong build live twice. Clone
+   the repo fresh as the single working copy, archive the stale `kolos 2`–`kolos 8`
+   folders, then deploy by `git push`.
+4. **Deploy through Preview, not straight to main.** Push a branch, check the
+   preview URL (healthz build string, clean console, one real question), then
+   merge.
+5. **Add the domain.** Vercel → project `kolos-5knq` → Settings → Domains → add
+   `kolos.panterrea.com`. Vercel issues a **project-specific CNAME target**, shaped
+   like `d1d4fc829fe7bc7c.vercel-dns-017.com` — read it off the dashboard. Do not
+   use the generic `cname.vercel-dns.com` that older guides still quote. Create
+   CNAME `kolos` → that value at whoever hosts panterrea.com DNS. Certificates are
+   automatic.
+6. **After it resolves:** update the GitHub About link (still points at the deleted
+   `kolos-ecru.vercel.app`), and swap the new URL into the marketing description
+   and Kolos Light's upsell so nothing ships pointing at a `vercel.app` address.
+
+Unknown: where panterrea.com DNS is managed. Needed for exact steps at step 5.
 
 ---
 

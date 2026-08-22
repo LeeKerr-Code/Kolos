@@ -597,7 +597,7 @@ const API_BASE = (window.KOLOS_API_BASE || '') + '/api/chat';
 
 /* Must match BUILD in api/healthz.js. A test enforces it.
    Check which build is actually live by visiting /api/healthz. */
-const KOLOS_BUILD = '2026-08-20.12';
+const KOLOS_BUILD = '2026-08-20.13';
 console.log('Kolos build ' + KOLOS_BUILD);
 
 const BASE_SYSTEM_PROMPT = `You are Kolos, a specialist advisor on financial support, grants, subsidies and loans for Ukrainian farmers and agricultural businesses, built for PanTerrea's farming community.
@@ -1570,9 +1570,15 @@ function applyLanguage(){
   if (profile.sector) fSector.value = profile.sector;
   if (profile.size) fSize.value = profile.size;
 
-  // chipGrid lives inside the welcome panel, so it is absent once a
-  // conversation exists. Same guard as the setText calls above.
-  const chipGrid = document.getElementById('chipGrid');
+  // chipGrid lives inside the welcome panel, and that panel is DETACHED from
+  // the document whenever a conversation exists — so document.getElementById
+  // cannot find it on a returning visit. Query the panel itself instead: a
+  // detached node keeps its children, so the chips are populated either way.
+  //
+  // Getting this wrong is not cosmetic. Guarding with `if (chipGrid)` alone
+  // meant a returning visitor who pressed New chat got the welcome panel back
+  // with no suggestions in it at all. See test-history.js.
+  const chipGrid = (welcomeEl && welcomeEl.querySelector('#chipGrid')) || document.getElementById('chipGrid');
   if (chipGrid) chipGrid.innerHTML = t.chips.map(c => `<button class="chip" data-q="${escapeHtml(c.q)}">${escapeHtml(c.label)}</button>`).join('');
 
   langEnBtn.classList.toggle('active', lang === 'en');

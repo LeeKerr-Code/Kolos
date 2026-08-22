@@ -175,6 +175,28 @@ function check(name, cond, detail) {
   const histLabel = await page2.locator('#historyBtn').innerText();
   check('History button localises', /Історія|History/.test(histLabel), histLabel);
 
+  // --- Suggestion chips must survive the returning-visitor path.
+  //
+  // Observed once in production on 20 Aug 2026: welcome panel visible with an
+  // empty #chipGrid, i.e. a returning visitor clicking New chat got no
+  // suggestions. Never reproduced — four scripted attempts all rendered 12 —
+  // so no app code was changed on the strength of it. This locks the scenario
+  // down so that if it is real, it fails here rather than in front of a farmer.
+  await page2.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+  await page2.reload({ waitUntil: 'networkidle' });
+  await page2.fill('#input', 'chip regression probe');
+  await page2.press('#input', 'Enter');
+  await page2.waitForSelector('.msg-row.agent:not(.typing)', { timeout: 20000 }).catch(() => {});
+  await page2.reload({ waitUntil: 'networkidle' });      // returning visit
+  await page2.locator('#resetBtn').click();               // re-attaches the welcome panel
+  await page2.waitForTimeout(300);
+  const chipsAfterNew = await page2.evaluate(() => document.querySelectorAll('#chipGrid .chip').length);
+  check('suggestion chips render after New chat on a returning visit', chipsAfterNew === 12, chipsAfterNew);
+
+  const chipsLocalised = await page2.evaluate(() =>
+    [...document.querySelectorAll('#chipGrid .chip')].every(c => c.textContent.trim().length > 0));
+  check('every rendered chip carries a label', chipsLocalised === true);
+
   check('no uncaught page errors throughout', pageErrors.length === 0, pageErrors);
 
   await browser.close();

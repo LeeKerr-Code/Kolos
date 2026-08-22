@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kolos Light — фінансування для агробізнесу</title>
+<meta name="description" content="Спробуйте Kolos: як шукати гранти, субсидії та кредити для українського агробізнесу.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0B2B2B; --teal:#147575; --teal-dark:#0F5C5C; --teal-tint:#E8F3F0;
+  --cream:#F3EFDD; --panel:#FCFAF2; --gold:#A8801F; --gold-tint:#F6EED9;
+  --line:#DED6B4; --muted:#5A6B60; --radius:14px;
+  --font-display:'Space Grotesk',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--font-body);line-height:1.55;-webkit-font-smoothing:antialiased}
+header{background:var(--teal-dark);color:#fff;padding:14px 18px}
+.hwrap{max-width:820px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.mark{width:38px;height:38px;border-radius:10px;background:var(--teal);display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:19px}
+.brand{font-family:var(--font-display);font-weight:700;font-size:20px;line-height:1.1}
+.brand small{display:block;font-family:var(--font-body);font-weight:400;font-size:12px;opacity:.85}
+.spacer{flex:1}
+.langbtn{background:rgba(255,255,255,.14);border:0;color:#fff;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;cursor:pointer}
+.langbtn[aria-pressed="true"]{background:#fff;color:var(--teal-dark);font-weight:600}
+main{max-width:820px;margin:0 auto;padding:22px 18px 60px}
+h1{font-family:var(--font-display);font-size:clamp(23px,4.4vw,31px);line-height:1.2;margin:6px 0 10px}
+.lede{color:var(--muted);margin:0 0 22px;font-size:15.5px}
+.chips{display:grid;gap:10px}
+.chip{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px;text-align:left;font:inherit;font-size:15.5px;color:var(--ink);cursor:pointer;transition:.15s}
+.chip:hover{border-color:var(--teal);background:var(--teal-tint)}
+.chip[aria-pressed="true"]{border-color:var(--teal);background:var(--teal-tint);font-weight:600}
+.chip span{display:block;font-size:13px;color:var(--muted);font-weight:400;margin-top:3px}
+.answer{margin-top:22px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px}
+.answer h2{font-family:var(--font-display);font-size:18px;margin:0 0 12px}
+.answer h3{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:20px 0 8px}
+.answer p{margin:0 0 12px}
+.answer ol,.answer ul{margin:0 0 12px;padding-left:20px}
+.answer li{margin-bottom:7px}
+.answer a{color:var(--teal-dark)}
+.upsell{margin-top:20px;background:var(--gold-tint);border:1px solid #E5D6A8;border-radius:var(--radius);padding:18px 20px}
+.upsell strong{font-family:var(--font-display)}
+.cta{display:inline-block;margin-top:12px;background:var(--teal);color:#fff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:999px;border:0;font:inherit;font-weight:600;cursor:pointer}
+.cta:hover{background:var(--teal-dark)}
+.gate{margin-top:26px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px}
+.gate h2{font-family:var(--font-display);font-size:18px;margin:0 0 6px}
+.gate p.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+.row{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+input,select,textarea{width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)}
+textarea{min-height:78px;resize:vertical}
+.field{margin-bottom:14px}
+.consent{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);margin:6px 0 14px}
+.consent input{width:auto;margin-top:3px}
+.note{font-size:12.5px;color:var(--muted);margin-top:14px}
+footer{max-width:820px;margin:0 auto;padding:0 18px 40px;font-size:12.5px;color:var(--muted)}
+.hidden{display:none}
+.status{margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--teal-tint);border:1px solid #C7DEDA;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="hwrap">
+    <div class="mark">K</div>
+    <div class="brand">Kolos <span style="font-weight:400;font-size:14px;opacity:.8">Light</span><small data-i="byline">by PanTerrea</small></div>
+    <div class="spacer"></div>
+    <button class="langbtn" id="uk" aria-pressed="true">UA</button>
+    <button class="langbtn" id="en" aria-pressed="false">EN</button>
+  </div>
+</header>
+
+<main>
+  <h1 data-i="h1"></h1>
+  <p class="lede" data-i="lede"></p>
+
+  <div class="chips" id="chips"></div>
+
+  <div id="answerWrap" class="hidden">
+    <div class="answer" id="answer"></div>
+    <div class="upsell">
+      <strong data-i="upsellTitle"></strong>
+      <p style="margin:8px 0 0" data-i="upsellBody"></p>
+      <button class="cta" id="toGate" data-i="upsellCta"></button>
+    </div>
+  </div>
+
+  <section class="gate hidden" id="gate">
+    <h2 data-i="gateTitle"></h2>
+    <p class="sub" data-i="gateSub"></p>
+    <form id="gateForm">
+      <div class="row">
+        <div class="field"><label data-i="lblOblast" for="oblast"></label><input id="oblast" name="oblast" required></div>
+        <div class="field"><label data-i="lblActivity" for="activity"></label><input id="activity" name="activity" required></div>
+      </div>
+      <div class="row">
+        <div class="field"><label data-i="lblSize" for="size"></label><input id="size" name="size" required></div>
+        <div class="field"><label data-i="lblChannel" for="channel"></label>
+          <select id="channel" name="channel">
+            <option value="telegram">Telegram</option>
+            <option value="viber">Viber</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label data-i="lblContact" for="contact"></label><input id="contact" name="contact" required></div>
+      <div class="field"><label data-i="lblQuestion" for="question"></label><textarea id="question" name="question" required></textarea></div>
+      <div class="consent">
+        <input type="checkbox" id="consent" required>
+        <label for="consent" style="font-weight:400;margin:0" data-i="consent"></label>
+      </div>
+      <button class="cta" type="submit" data-i="gateCta"></button>
+      <div class="note" data-i="gateNote"></div>
+    </form>
+    <div id="gateDone" class="status hidden"></div>
+  </section>
+</main>
+
+<footer><p data-i="disclaimer"></p></footer>
+
+<script>
+/* =====================================================================
+   Kolos Light — standalone taster. No API key, no backend call.
+   All three chip answers are pre-written and reviewed. Nothing here
+   contacts api.anthropic.com; that is deliberate, so an ad campaign
+   cannot run up a bill on anonymous traffic.
+
+   Wire the capture form up by setting, before this script runs:
+     window.KOLOS_LIGHT_ENDPOINT = 'https://your-endpoint.example/lead';
+   With no endpoint set the form validates and confirms but sends
+   nothing anywhere. It never stores data in the browser.
+   ===================================================================== */
+var KOLOS_LIGHT_BUILD='2026-08-13.1';
+console.log('Kolos Light build '+KOLOS_LIGHT_BUILD);
+
+var T={
+uk:{
+ byline:'від PanTerrea',
+ h1:'Спробуйте Kolos',
+ lede:'Оберіть питання — і подивіться, як Kolos відповідає. Це загальні відповіді, однакові для всіх. Повний Kolos перевіряє саме ваше господарство за актуальними джерелами.',
+ chips:[
+  {t:'З чого почати пошук фінансування?',s:'Реєстрація, юридична форма, який портал за що відповідає'},
+  {t:'Мені відмовив банк — які є варіанти?',s:'Гарантії, лізинг, гранти замість кредиту'},
+  {t:'Моє господарство постраждало від війни',s:'Фіксація збитків, ЕКА, розмінування'}
+ ],
+ upsellTitle:'Це загальна відповідь.',
+ upsellBody:'Повний Kolos враховує ваш регіон, напрям діяльності та розмір господарства, перевіряє актуальні умови на момент запиту і каже, за якими критеріями ви підходите, а за якими ні.',
+ upsellCta:'Поставити питання про своє господарство',
+ gateTitle:'Одне безкоштовне персональне питання',
+ gateSub:'Розкажіть про господарство — ми надішлемо відповідь у зручний вам канал.',
+ lblOblast:'Область', lblActivity:'Напрям діяльності', lblSize:'Розмір господарства (га)',
+ lblChannel:'Канал для відповіді', lblContact:'Контакт', lblQuestion:'Ваше питання',
+ consent:'Погоджуюся, щоб PanTerrea використала ці дані для підготовки відповіді та зв’язку зі мною. Дані не передаються третім сторонам.',
+ gateCta:'Надіслати', gateNote:'Одна відповідь безкоштовно. Без картки.',
+ done:'Дякуємо. Ми підготуємо відповідь і надішлемо її у вказаний канал.',
+ notWired:'Форма ще не підключена до сервера — дані нікуди не надіслані.',
+ disclaimer:'Kolos — інформаційний сервіс. Він не видає гранти чи кредити, не ухвалює рішень про фінансування і не є фінансовим, юридичним або податковим консультантом. Умови програм змінюються часто — перевіряйте їх безпосередньо в організації, яка надає фінансування, перед подачею заявки.'
+},
+en:{
+ byline:'by PanTerrea',
+ h1:'Try Kolos',
+ lede:'Pick a question and see how Kolos answers. These are general answers, the same for everyone. Full Kolos checks your own farm against current sources.',
+ chips:[
+  {t:'Where do I start looking for funding?',s:'Registration, legal form, which portal handles what'},
+  {t:'The bank refused me — what are my options?',s:'Guarantees, leasing, grants instead of credit'},
+  {t:'My farm has been damaged by the war',s:'Documenting losses, ECA, demining'}
+ ],
+ upsellTitle:'That was the general answer.',
+ upsellBody:'Full Kolos takes your region, activity and farm size into account, checks current conditions at the moment you ask, and tells you which criteria you meet and which you do not.',
+ upsellCta:'Ask about my own farm',
+ gateTitle:'One free personalised question',
+ gateSub:'Tell us about the farm and we will send the answer to whichever channel suits you.',
+ lblOblast:'Oblast', lblActivity:'Type of farming', lblSize:'Farm size (ha)',
+ lblChannel:'Where to reply', lblContact:'Contact', lblQuestion:'Your question',
+ consent:'I agree that PanTerrea may use these details to prepare an answer and contact me. Details are not shared with third parties.',
+ gateCta:'Send', gateNote:'One answer free. No card needed.',
+ done:'Thank you. We will prepare an answer and send it to the channel you gave.',
+ notWired:'The form is not connected to a server yet — nothing was sent.',
+ disclaimer:'Kolos is an information service. It does not issue grants or loans, does not decide who receives funding, and is not a financial, legal or tax adviser. Programme terms change often — confirm them directly with the body providing the funding before you apply.'
+}};
+
+var A={
+uk:[
+`<h2>З чого почати пошук фінансування</h2>
+<p>Більшість програм в Україні вимагають, щоб господарство було зареєстрованим суб’єктом і мало підтверджену діяльність. Порядок кроків зазвичай такий.</p>
+<ol>
+<li><strong>Визначте юридичну форму.</strong> ФОП, фермерське господарство або ТОВ. Від цього залежить, до яких програм ви взагалі маєте доступ — частина програм закрита для фізичних осіб без реєстрації.</li>
+<li><strong>Зареєструйтеся в Державному аграрному реєстрі</strong> — <a href="https://www.dar.gov.ua/" target="_blank" rel="noopener noreferrer">dar.gov.ua</a>. Це вхід до низки державних дотацій і компенсацій для аграріїв.</li>
+<li><strong>Зрозумійте, який портал за що відповідає.</strong> Це найчастіше джерело плутанини:
+ <ul>
+ <li>ДАР — дотації та компенсації для сільгоспвиробників</li>
+ <li>Дія / єРобота — гранти на розвиток бізнесу, зокрема садівництво та теплиці</li>
+ <li>Банки-партнери — пільгові та гарантовані кредити</li>
+ <li>ЕКА — воєнні ризики та пошкоджене майно</li>
+ </ul>
+</li>
+<li><strong>Зберіть базовий пакет:</strong> документи на землю, підтвердження діяльності, фінансова звітність, реквізити.</li>
+</ol>
+<h3>Що найчастіше стає причиною відмови</h3>
+<ul>
+<li>невідповідна юридична форма або відсутність реєстрації;</li>
+<li>немає власного співфінансування, якого вимагає програма;</li>
+<li>неповний пакет документів або прострочені довідки;</li>
+<li>заявка подана не на той портал.</li>
+</ul>`,
+
+`<h2>Банк відмовив — які є варіанти</h2>
+<p>Відмова банку найчастіше пов’язана з відсутністю застави або короткою кредитною історією. Це не глухий кут — існує кілька окремих маршрутів.</p>
+<ol>
+<li><strong>Часткова державна гарантія.</strong> Фонд часткового гарантування кредитів у сільському господарстві — <a href="https://pcgf.com.ua/" target="_blank" rel="noopener noreferrer">pcgf.com.ua</a> — бере на себе частину ризику для малих і середніх виробників, яким бракує застави. Звертатися треба через банк-партнер, а не напряму.</li>
+<li><strong>Лізинг замість кредиту.</strong> Технiка або обладнання самі виступають забезпеченням, тому вимоги до застави нижчі.</li>
+<li><strong>Грант замість кредиту.</strong> Програми на платформі Дія не потребують повернення коштів, але майже завжди вимагають власного співфінансування та створення робочих місць. Це інший тип зобов’язань, не легший — інший.</li>
+<li><strong>Кредитні спілки та кооперативи</strong> — менші суми, простіші вимоги.</li>
+</ol>
+<h3>Що варто виправити перед повторним зверненням</h3>
+<ul>
+<li>реєстрація в Державному аграрному реєстрі;</li>
+<li>оформлені права на землю;</li>
+<li>впорядкована фінансова звітність за останні періоди;</li>
+<li>чіткий розрахунок, на що саме потрібні кошти й за рахунок чого повертатимуться.</li>
+</ul>`,
+
+`<h2>Господарство постраждало від війни</h2>
+<p>Порядок дій має значення. Компенсація майже завжди залежить від того, наскільки добре зафіксовано збитки — і зробити це потрібно до подачі заявки.</p>
+<ol>
+<li><strong>Зафіксуйте пошкодження.</strong> Фото та відео з датою, письмове звернення до місцевої влади, виклик поліції або ДСНС, акт огляду. Без документального сліду більшість шляхів закриваються.</li>
+<li><strong>Внесіть майно до державного реєстру пошкодженого майна</strong> через Дію.</li>
+<li><strong>Експортно-кредитне агентство (ЕКА)</strong> — <a href="https://www.eca.gov.ua/produkty/pk/" target="_blank" rel="noopener noreferrer">eca.gov.ua</a> — має продукти щодо воєнних ризиків і пошкодженого майна.</li>
+<li><strong>Якщо земля замінована</strong>, держава компенсує гуманітарне розмінування сільгоспугідь. Роботи виконують уповноважені оператори, і порядок відрізняється від компенсації за пошкоджене майно.</li>
+</ol>
+<h3>На що звернути увагу</h3>
+<ul>
+<li>умови та строки цих програм змінюються частіше за інші — перевіряйте на момент подачі;</li>
+<li>для землі в зоні бойових дій або на окупованій території діють окремі правила, зокрема нижчі вимоги до співфінансування;</li>
+<li>фіксація збитків не має строку давності, але чим пізніше, тим складніше довести причину.</li>
+</ul>`
+],
+en:[
+`<h2>Where to start looking for funding</h2>
+<p>Most Ukrainian programmes require the farm to be a registered entity with evidenced activity. The order usually goes like this.</p>
+<ol>
+<li><strong>Settle the legal form.</strong> Sole trader, farming enterprise or limited company. This determines which programmes are open to you at all — several are closed to unregistered individuals.</li>
+<li><strong>Register with the State Agrarian Register</strong> — <a href="https://www.dar.gov.ua/" target="_blank" rel="noopener noreferrer">dar.gov.ua</a>. It is the door to a range of state subsidies and compensation schemes for producers.</li>
+<li><strong>Learn which portal handles what.</strong> This is the most common source of confusion:
+ <ul>
+ <li>State Agrarian Register — subsidies and compensation for producers</li>
+ <li>Diia / eRobota — business development grants, including orchards and greenhouses</li>
+ <li>Partner banks — preferential and guaranteed lending</li>
+ <li>ECA — war risk and damaged property</li>
+ </ul>
+</li>
+<li><strong>Assemble the basic pack:</strong> land documents, evidence of activity, financial statements, bank details.</li>
+</ol>
+<h3>What most often causes a refusal</h3>
+<ul>
+<li>wrong legal form, or no registration at all;</li>
+<li>no co-financing of the kind the programme requires;</li>
+<li>incomplete paperwork or expired certificates;</li>
+<li>applying through the wrong portal.</li>
+</ul>`,
+
+`<h2>The bank refused you — what now</h2>
+<p>Refusals usually come down to a lack of collateral or a short credit history. That is not the end of it; several separate routes exist.</p>
+<ol>
+<li><strong>Partial state guarantee.</strong> The partial credit guarantee fund for agriculture — <a href="https://pcgf.com.ua/" target="_blank" rel="noopener noreferrer">pcgf.com.ua</a> — takes on part of the risk for small and medium producers who lack collateral. You apply through a partner bank, not directly.</li>
+<li><strong>Leasing instead of a loan.</strong> The machinery or equipment acts as the security, so collateral requirements are lower.</li>
+<li><strong>A grant instead of credit.</strong> Programmes on the Diia platform do not have to be repaid, but almost always require your own co-financing and the creation of jobs. That is a different set of obligations, not a lighter one.</li>
+<li><strong>Credit unions and cooperatives</strong> — smaller sums, simpler requirements.</li>
+</ol>
+<h3>What to fix before applying again</h3>
+<ul>
+<li>registration with the State Agrarian Register;</li>
+<li>land rights properly documented;</li>
+<li>tidy financial statements for recent periods;</li>
+<li>a clear account of what the money is for and how it will be repaid.</li>
+</ul>`,
+
+`<h2>Your farm has been damaged by the war</h2>
+<p>The order matters. Compensation almost always depends on how well the damage was recorded, and that has to happen before you apply.</p>
+<ol>
+<li><strong>Record the damage.</strong> Dated photographs and video, a written report to the local authority, a police or emergency service callout, an inspection report. Without a documentary trail most routes close.</li>
+<li><strong>Enter the property on the state register of damaged property</strong> through Diia.</li>
+<li><strong>The Export Credit Agency (ECA)</strong> — <a href="https://www.eca.gov.ua/produkty/pk/" target="_blank" rel="noopener noreferrer">eca.gov.ua</a> — runs products covering war risk and damaged property.</li>
+<li><strong>If the land is mined</strong>, the state compensates humanitarian demining of agricultural land. The work is done by authorised operators and the process differs from property damage compensation.</li>
+</ol>
+<h3>Worth knowing</h3>
+<ul>
+<li>terms and deadlines here change more often than elsewhere — check them at the moment you apply;</li>
+<li>land in active combat zones or occupied territory falls under separate rules, including lower co-financing requirements;</li>
+<li>there is no time limit on recording damage, but the later you leave it the harder the cause is to prove.</li>
+</ul>`
+]};
+
+var lang='uk', picked=-1;
+var $=function(s){return document.querySelector(s)};
+
+function renderChips(){
+  var box=$('#chips'); box.innerHTML='';
+  T[lang].chips.forEach(function(c,i){
+    var b=document.createElement('button');
+    b.className='chip'; b.type='button';
+    b.setAttribute('aria-pressed', String(i===picked));
+    b.innerHTML='<strong>'+c.t+'</strong><span>'+c.s+'</span>';
+    b.addEventListener('click',function(){ picked=i; render(); 
+      setTimeout(function(){ $('#answerWrap').scrollIntoView({behavior:'smooth',block:'start'}); },40);
+    });
+    box.appendChild(b);
+  });
+}
+
+function render(){
+  var t=T[lang];
+  document.documentElement.lang = (lang==='uk'?'uk':'en');
+  document.querySelectorAll('[data-i]').forEach(function(el){
+    var k=el.getAttribute('data-i');
+    if(typeof t[k]==='string') el.textContent=t[k];
+  });
+  $('#uk').setAttribute('aria-pressed', String(lang==='uk'));
+  $('#en').setAttribute('aria-pressed', String(lang==='en'));
+  renderChips();
+  if(picked>=0){
+    $('#answer').innerHTML=A[lang][picked];
+    $('#answerWrap').classList.remove('hidden');
+  }
+  var done=$('#gateDone');
+  if(!done.classList.contains('hidden')) done.textContent=t.done;
+}
+
+$('#uk').addEventListener('click',function(){lang='uk';render()});
+$('#en').addEventListener('click',function(){lang='en';render()});
+$('#toGate').addEventListener('click',function(){
+  $('#gate').classList.remove('hidden');
+  $('#gate').scrollIntoView({behavior:'smooth',block:'start'});
+});
+
+$('#gateForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var payload={
+    oblast:$('#oblast').value.trim(), activity:$('#activity').value.trim(),
+    size:$('#size').value.trim(), channel:$('#channel').value,
+    contact:$('#contact').value.trim(), question:$('#question').value.trim(),
+    lang:lang, build:KOLOS_LIGHT_BUILD
+  };
+  var url=window.KOLOS_LIGHT_ENDPOINT;
+  var done=$('#gateDone'), form=$('#gateForm');
+  var finish=function(msg){ form.classList.add('hidden'); done.textContent=msg; done.classList.remove('hidden'); };
+  if(!url){ console.warn('KOLOS_LIGHT_ENDPOINT not set; nothing sent.', payload); finish(T[lang].done+' ('+T[lang].notWired+')'); return; }
+  fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(){ finish(T[lang].done); })
+    .catch(function(){ finish(T[lang].done); });
+});
+
+render();
+</script>
+</body>
+</html>

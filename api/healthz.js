@@ -10,7 +10,7 @@
  * you can read the answer in two seconds. The same string is embedded in the
  * HTML and a test asserts the two agree, so they cannot drift apart.
  */
-const BUILD = '2026-08-20.12';
+const BUILD = '2026-08-20.13';
 
 module.exports = function handler(req, res) {
   res.status(200).json({ ok: true, build: BUILD });
